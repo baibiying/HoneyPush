@@ -1,0 +1,43 @@
+import { boolean, integer, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import type { InferSelectModel } from "drizzle-orm";
+
+// 专注记录表
+export const focusSessions = pgTable("focus_sessions", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  officerId: varchar("officer_id", { length: 32 }).notNull().default("yuri"),
+  durationMinutes: integer("duration_minutes").notNull().default(25),
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
+  coinsEarned: integer("coins_earned").notNull().default(15),
+  distractionCount: integer("distraction_count").notNull().default(0),
+});
+
+export type FocusSession = InferSelectModel<typeof focusSessions>;
+
+// 任务表
+export const tasks = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  text: text("text").notNull(),
+  durationMinutes: integer("duration_minutes").notNull().default(25),
+  category: varchar("category", { length: 64 }).notNull().default("import-urgent"),
+  checked: boolean("checked").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type Task = InferSelectModel<typeof tasks>;
+
+// 用户专注统计表
+export const userStats = pgTable("user_stats", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().unique(),
+  totalCoins: integer("total_coins").notNull().default(0),
+  consecutiveDays: integer("consecutive_days").notNull().default(0),
+  totalSessions: integer("total_sessions").notNull().default(0),
+  lastSessionDate: timestamp("last_session_date"),
+  unlockedBadges: text("unlocked_badges").array().notNull().default([]),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type UserStats = InferSelectModel<typeof userStats>;
