@@ -2,13 +2,11 @@
 
 import type { ReactNode } from "react";
 import {
-  ArrowLeft,
   CalendarDays,
   Clock,
   LayoutGrid,
   Map,
   Plus,
-  Sparkles,
   X,
 } from "lucide-react";
 
@@ -33,15 +31,13 @@ type ScheduleGameHubProps = {
   scheduledCount: number;
   availabilityCount: number;
   questSteps: QuestStep[];
-  aiLoading: boolean;
-  aiDisabled: boolean;
-  aiLabel: string;
-  onAiSchedule: () => void;
   onOpenAddTask: () => void;
   onRequireLogin: (message: string) => void;
   tasksPanel: ReactNode;
   timePanel: ReactNode;
-  calendarPanel: ReactNode;
+  schedulePanel: ReactNode;
+  scheduleOverlay?: ReactNode;
+  scheduleCalendarHidden?: boolean;
 };
 
 type StationConfig = {
@@ -87,8 +83,8 @@ const STATIONS: StationConfig[] = [
   {
     id: "calendar",
     action: "enter",
-    title: "战役日历",
-    subtitle: "查看 AI 排期战果",
+    title: "AI 排期",
+    subtitle: "查看日历 · 一键排期全部任务",
     icon: CalendarDays,
     gradient: "from-fuchsia-500 to-purple-600",
     glow: "shadow-[0_0_28px_rgba(192,132,252,0.45)]",
@@ -224,45 +220,6 @@ function StationCard({
   );
 }
 
-function SceneFrame({
-  title,
-  subtitle,
-  onBack,
-  children,
-  action,
-}: {
-  title: string;
-  subtitle: string;
-  onBack: () => void;
-  children: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="animate-[fadeIn_0.3s_ease-out] flex flex-col flex-1 min-h-0">
-      <div className="mb-3 sm:mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex items-center gap-1.5 rounded-xl border-2 border-[#1C1917] bg-white px-3 py-2 text-xs font-bold text-[#1C1917] comic-shadow-sm hover:bg-amber-50 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            返回地图
-          </button>
-          <div>
-            <h2 className="font-bangers text-xl sm:text-2xl text-white tracking-wide">{title}</h2>
-            <p className="text-xs font-semibold text-white/70">{subtitle}</p>
-          </div>
-        </div>
-        {action}
-      </div>
-      <div className="flex-1 min-h-0 rounded-xl sm:rounded-2xl border-[3px] border-[#1C1917] bg-[#FFFBF0] comic-shadow overflow-hidden flex flex-col">
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 export function ScheduleGameHub({
   scene,
   onSceneChange,
@@ -271,15 +228,13 @@ export function ScheduleGameHub({
   scheduledCount,
   availabilityCount,
   questSteps,
-  aiLoading,
-  aiDisabled,
-  aiLabel,
-  onAiSchedule,
   onOpenAddTask,
   onRequireLogin,
   tasksPanel,
   timePanel,
-  calendarPanel,
+  schedulePanel,
+  scheduleOverlay,
+  scheduleCalendarHidden = false,
 }: ScheduleGameHubProps) {
   const mapStations: StationConfig[] = STATIONS;
 
@@ -345,7 +300,7 @@ export function ScheduleGameHub({
                 ))}
               </div>
               <p className="mt-6 text-center text-[10px] text-white/50 font-medium max-w-md mx-auto">
-                推荐流程：创建任务 → 查看任务 → 可用时段 → AI 排期 → 战役日历验收
+                推荐流程：创建任务 → 查看任务 → 可用时段 → AI 排期
               </p>
             </div>
           ) : scene === "tasks" ? (
@@ -367,9 +322,6 @@ export function ScheduleGameHub({
                     <h2 className="font-bangers text-lg sm:text-2xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917] truncate">
                       查看任务
                     </h2>
-                    <p className="text-[10px] sm:text-xs font-semibold text-amber-100/85 truncate">
-                      已创建任务 · 悬停查看详情 · 点击编辑或删除
-                    </p>
                   </div>
                 </div>
               </div>
@@ -396,46 +348,49 @@ export function ScheduleGameHub({
                     <h2 className="font-bangers text-lg sm:text-2xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917] truncate">
                       可用时段
                     </h2>
-                    <p className="text-[10px] sm:text-xs font-semibold text-amber-100/85 truncate">
-                      设置每天能做任务的时段 · 番茄钟 25+5
-                    </p>
                   </div>
                 </div>
               </div>
               <div className={`flex-1 min-h-0 overflow-hidden p-1 sm:p-2 ${FROSTED_PANEL}`}>
                 <div className="h-full min-h-0 overflow-y-auto p-3 sm:p-4">{timePanel}</div>
               </div>
-              <div className="shrink-0 pt-3">
-                <button
-                  type="button"
-                  onClick={() => onAiSchedule()}
-                  disabled={aiDisabled || aiLoading}
-                  className="w-full h-12 rounded-xl border-2 border-[#1C1917] bg-gradient-to-r from-amber-400 via-orange-400 to-[#F15A24] px-6 font-bangers text-lg sm:text-xl tracking-wide text-[#1C1917] comic-shadow-sm comic-btn-push hover:from-amber-300 hover:via-orange-300 hover:to-[#e04f1a] disabled:opacity-50 disabled:from-neutral-400 disabled:via-neutral-400 disabled:to-neutral-500 disabled:shadow-none flex items-center justify-center gap-2"
-                >
-                  <Sparkles className={`h-5 w-5 ${aiLoading ? "animate-pulse" : ""}`} />
-                  {aiLabel}
-                </button>
-              </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <SceneFrame
-              title="战役日历"
-              subtitle="纵轴为时间，查看 AI 排期后的执行计划"
-              onBack={() => onSceneChange("map")}
-              action={
-                <button
-                  type="button"
-                  onClick={() => onSceneChange("time")}
-                  className="shrink-0 flex items-center gap-1.5 rounded-xl border-2 border-[#1C1917] bg-violet-500 px-4 py-2 text-xs font-bold text-white comic-shadow-sm hover:bg-violet-600"
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden -mx-1 sm:-mx-2 animate-[fadeIn_0.3s_ease-out]">
+              <button
+                type="button"
+                onClick={() => onSceneChange("map")}
+                className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-white/95 text-[#1C1917] comic-shadow-sm hover:bg-amber-50"
+                aria-label="返回地图"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="shrink-0 mb-2 sm:mb-3 pr-12">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white shadow-[0_3px_0_#312e81]">
+                    <CalendarDays className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="font-bangers text-lg sm:text-2xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917] truncate">
+                      AI 排期
+                    </h2>
+                  </div>
+                </div>
+              </div>
+              <div
+                className={`relative flex-1 min-h-0 overflow-hidden p-1 sm:p-2 ${FROSTED_PANEL} flex flex-col`}
+              >
+                <div
+                  className={[
+                    "flex-1 min-h-0 h-full min-w-0 transition-opacity duration-200",
+                    scheduleCalendarHidden ? "opacity-0 pointer-events-none" : "opacity-100",
+                  ].join(" ")}
+                  aria-hidden={scheduleCalendarHidden}
                 >
-                  <Clock className="h-4 w-4" />
-                  去排期
-                </button>
-              }
-            >
-              {calendarPanel}
-            </SceneFrame>
+                  {schedulePanel}
+                </div>
+                {scheduleOverlay}
+              </div>
             </div>
           )}
         </div>

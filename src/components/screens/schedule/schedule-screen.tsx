@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { memory } from "@eazo/sdk";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -10,6 +10,7 @@ import { TaskEditDialog, type ScheduleTask } from "./task-edit-dialog";
 import { QuadrantTaskBoard } from "./quadrant-task-board";
 import { ScheduleCalendar } from "./schedule-calendar";
 import { ScheduleGameHub, type ScheduleScene } from "./schedule-game-hub";
+import { SchedulePromptOverlay } from "./schedule-prompt-overlay";
 import {
   AvailabilityEditor,
   toAvailabilityRows,
@@ -18,6 +19,40 @@ import {
 import { buildAvailabilityWindows, type AvailabilitySlotInput } from "@/lib/ai/availability";
 
 const AVAILABILITY_STORAGE_KEY = "honeypush-availability-v1";
+const SCHEDULE_SNAPSHOT_KEY = "honeypush-schedule-snapshot-v1";
+
+type ScheduleSnapshot = {
+  availability: string;
+};
+
+function loadScheduleSnapshot(): ScheduleSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(SCHEDULE_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ScheduleSnapshot;
+    if (parsed && typeof parsed.availability === "string") return parsed;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function saveScheduleSnapshot(availability: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(
+    SCHEDULE_SNAPSHOT_KEY,
+    JSON.stringify({ availability } satisfies ScheduleSnapshot)
+  );
+}
+
+function serializeAvailabilitySlots(slots: AvailabilitySlotRow[]) {
+  return JSON.stringify(
+    slots
+      .map(({ date, startTime, endTime }) => ({ date, startTime, endTime }))
+      .sort((a, b) => `${a.date}T${a.startTime}`.localeCompare(`${b.date}T${b.startTime}`))
+  );
+}
 
 function loadAvailabilitySlots(): AvailabilitySlotRow[] {
   if (typeof window === "undefined") return [];
@@ -74,6 +109,9 @@ export function ScheduleScreen() {
   const [openTaskMenuId, setOpenTaskMenuId] = useState<number | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [scene, setScene] = useState<ScheduleScene>("map");
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
+  const [schedulePromptOpen, setSchedulePromptOpen] = useState(false);
+  const prevSceneRef = useRef<ScheduleScene>("map");
 
   const canEdit = Boolean(user);
 
@@ -93,6 +131,40 @@ export function ScheduleScreen() {
       pendingTasks.filter((task) => task.scheduledStartAt && task.scheduledEndAt).length,
     [pendingTasks]
   );
+
+  const scheduleRefreshHint = useMemo(() => {
+    if (!canEdit || pendingTasks.length === 0) return null;
+
+    const reasons: string[] = [];
+    const unscheduledCount = pendingTasks.filter(
+      (task) => !task.scheduledStartAt || !task.scheduledEndAt
+    ).length;
+
+    if (unscheduledCount > 0) {
+      reasons.push(
+        unscheduledCount === pendingTasks.length
+          ? `${unscheduledCount} 条待办尚未排期`
+          : `${unscheduledCount} 条任务尚未排期`
+      );
+    }
+
+    const snapshot = loadScheduleSnapshot();
+    const currentAvailability = serializeAvailabilitySlots(availabilitySlots);
+    const availabilityOutOfSync =
+      snapshot !== null && currentAvailability !== snapshot.availability;
+    const hasScheduledButNoSnapshot = scheduledCount > 0 && snapshot === null;
+
+    if (availabilityOutOfSync || hasScheduledButNoSnapshot) {
+      reasons.push("可用时段已调整");
+    }
+
+    if (reasons.length === 0) return null;
+
+    return {
+      reasons,
+      isReschedule: scheduledCount > 0,
+    };
+  }, [canEdit, pendingTasks, availabilitySlots, scheduledCount]);
 
   const validAvailabilityCount = useMemo(() => {
     const payload = availabilitySlots.map(({ date, startTime, endTime }) => ({
@@ -119,13 +191,7 @@ export function ScheduleScreen() {
       },
       {
         id: "battle",
-        label: "AI 出征",
-        done: scheduledCount > 0,
-        scene: "time" as const,
-      },
-      {
-        id: "report",
-        label: "查看战况",
+        label: "AI 排期",
         done: scheduledCount > 0,
         scene: "calendar" as const,
       },
@@ -141,6 +207,20 @@ export function ScheduleScreen() {
     }));
     localStorage.setItem(AVAILABILITY_STORAGE_KEY, JSON.stringify(payload));
   }, [availabilitySlots]);
+
+  useEffect(() => {
+    const enteredCalendar = scene === "calendar" && prevSceneRef.current !== "calendar";
+    prevSceneRef.current = scene;
+
+    if (scene !== "calendar") {
+      setSchedulePromptOpen(false);
+      return;
+    }
+
+    if (enteredCalendar && scheduleRefreshHint) {
+      setSchedulePromptOpen(true);
+    }
+  }, [scene, scheduleRefreshHint]);
 
   useEffect(() => {
     if (openTaskMenuId === null) return;
@@ -263,153 +343,180 @@ export function ScheduleScreen() {
     }
   };
 
-  const handleAiSchedule = async () => {
-    if (!canEdit) {
-      promptLogin("登录后才能使用 AI 排期。");
-      return;
-    }
-
-    if (pendingTasks.length === 0) {
-      alert("请先在「添加任务」里添加至少一条待办。");
-      return;
-    }
-
-    const missingDeadline = pendingTasks.filter((task) => !task.deadline);
-    if (missingDeadline.length > 0) {
-      alert("请为每条待排期任务填写截止时间后再执行 AI 排期。");
-      return;
-    }
-
-    const availability = availabilitySlots.map(({ date, startTime, endTime }) => ({
-      date,
-      startTime,
-      endTime,
-    }));
-    if (availability.length === 0) {
-      alert("请至少添加一个今天或未来几天的可用时间段。");
-      return;
-    }
-    if (buildAvailabilityWindows(availability).length === 0) {
-      alert("可用时间段均已过期，请添加今天或未来的时段后再排期。");
-      return;
-    }
-
-    setAiLoading(true);
-    try {
-      const res = await request("/api/ai-schedule", {
-        method: "POST",
+  const updateTaskById = useCallback(
+    async (
+      id: number,
+      payload: Partial<
+        Pick<
+          ScheduleTask,
+          | "text"
+          | "checked"
+          | "category"
+          | "durationMinutes"
+          | "deadline"
+          | "scheduledStartAt"
+          | "scheduledEndAt"
+        >
+      >
+    ) => {
+      const res = await request(`/api/tasks/${id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          availability,
-          tasks: pendingTasks.map((task) => ({
-            id: task.id,
-            text: task.text,
-            durationMinutes: task.durationMinutes,
-            category: task.category,
-            deadline: task.deadline,
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         if (res.status === 401) {
-          promptLogin("登录后才能使用 AI 排期。");
-          return;
+          promptLogin("登录后才能修改任务。");
+          throw new Error("AUTH_REQUIRED");
         }
         throw new Error(await readApiError(res));
       }
 
-      const data = (await res.json()) as {
-        schedule?: Array<{
-          id: number;
-          category: string;
-          durationMinutes: number;
-          order: number;
-          scheduledStartAt: string;
-          scheduledEndAt: string;
-        }>;
-        unscheduledIds?: number[];
-        source?: string;
-      };
+      const updated = (await res.json()) as ScheduleTask;
+      setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      emitClientEvent(TASKS_CHANGED_EVENT);
+      return updated;
+    },
+    [promptLogin]
+  );
 
-      const plan = Array.isArray(data.schedule) ? data.schedule : [];
-      if (plan.length === 0) {
-        alert("在可用时间段内无法排下任何任务，请增加未来几天的时段或缩短任务时长。");
+  const handleAiSchedule = useCallback(
+    async (options?: { auto?: boolean }) => {
+      const isAuto = options?.auto === true;
+
+      if (!canEdit) {
+        if (!isAuto) promptLogin("登录后才能使用 AI 排期。");
         return;
       }
 
-      const updatedTasks = await Promise.all(
-        plan.map((item) =>
-          updateTaskById(item.id, {
-            category: item.category,
-            durationMinutes: item.durationMinutes,
-            scheduledStartAt: item.scheduledStartAt,
-            scheduledEndAt: item.scheduledEndAt,
-          })
-        )
-      );
+      if (aiLoading) return;
 
-      setTasks((prev) =>
-        prev.map((task) => updatedTasks.find((item) => item.id === task.id) ?? task)
-      );
-
-      const unscheduled = Array.isArray(data.unscheduledIds) ? data.unscheduledIds : [];
-      if (unscheduled.length > 0) {
-        alert(
-          `已排期 ${plan.length} 条任务。另有 ${unscheduled.length} 条在可用时段内排不下，请增加明天或之后的时间段后重试。`
-        );
+      if (pendingTasks.length === 0) {
+        if (!isAuto) alert("请先在「创建任务」里添加至少一条待办。");
+        return;
       }
+
+      const missingDeadline = pendingTasks.filter((task) => !task.deadline);
+      if (missingDeadline.length > 0) {
+        if (!isAuto) alert("请为每条待排期任务填写截止时间后再执行 AI 排期。");
+        return;
+      }
+
+      const availability = availabilitySlots.map(({ date, startTime, endTime }) => ({
+        date,
+        startTime,
+        endTime,
+      }));
+      if (availability.length === 0) {
+        if (!isAuto) alert("请至少添加一个今天或未来几天的可用时间段。");
+        return;
+      }
+      if (buildAvailabilityWindows(availability).length === 0) {
+        if (!isAuto) alert("可用时间段均已过期，请添加今天或未来的时段后再排期。");
+        return;
+      }
+
+      setAiLoading(true);
+      try {
+        const res = await request("/api/ai-schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            availability,
+            tasks: pendingTasks.map((task) => ({
+              id: task.id,
+              text: task.text,
+              durationMinutes: task.durationMinutes,
+              category: task.category,
+              deadline: task.deadline,
+            })),
+          }),
+        });
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            if (!isAuto) promptLogin("登录后才能使用 AI 排期。");
+            return;
+          }
+          throw new Error(await readApiError(res));
+        }
+
+        const data = (await res.json()) as {
+          schedule?: Array<{
+            id: number;
+            category: string;
+            durationMinutes: number;
+            order: number;
+            scheduledStartAt: string;
+            scheduledEndAt: string;
+          }>;
+          unscheduledIds?: number[];
+          source?: string;
+        };
+
+        const plan = Array.isArray(data.schedule) ? data.schedule : [];
+        if (plan.length === 0) {
+          if (!isAuto) {
+            alert("在可用时间段内无法排下任何任务，请增加未来几天的时段或缩短任务时长。");
+          }
+          return;
+        }
+
+        const updatedTasks = await Promise.all(
+          plan.map((item) =>
+            updateTaskById(item.id, {
+              category: item.category,
+              durationMinutes: item.durationMinutes,
+              scheduledStartAt: item.scheduledStartAt,
+              scheduledEndAt: item.scheduledEndAt,
+            })
+          )
+        );
+
+        setTasks((prev) =>
+          prev.map((task) => updatedTasks.find((item) => item.id === task.id) ?? task)
+        );
+
+        const unscheduled = Array.isArray(data.unscheduledIds) ? data.unscheduledIds : [];
+        if (unscheduled.length > 0) {
+          const message = isAuto
+            ? `时段已更新：${plan.length} 条已重新排期，另有 ${unscheduled.length} 条在可用时段内排不下。`
+            : `已排期 ${plan.length} 条任务。另有 ${unscheduled.length} 条在可用时段内排不下，请增加明天或之后的时间段后重试。`;
+          alert(message);
+        }
 
       playChime();
-      setScene("calendar");
+      setCalendarRefreshKey((key) => key + 1);
+      saveScheduleSnapshot(serializeAvailabilitySlots(availabilitySlots));
+      setSchedulePromptOpen(false);
       memory.reportAction({
-        content: `用户对 ${plan.length} 条任务执行 AI 排期`,
-        event_type: "update",
-        page: "schedule",
-        metadata: { type: "ai_schedule_existing", source: data.source ?? "unknown" },
-      }).catch(() => {});
-    } catch (err) {
-      if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : "AI 排期失败，请重试");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const updateTaskById = async (
-    id: number,
-    payload: Partial<
-      Pick<
-        ScheduleTask,
-        | "text"
-        | "checked"
-        | "category"
-        | "durationMinutes"
-        | "deadline"
-        | "scheduledStartAt"
-        | "scheduledEndAt"
-      >
-    >
-  ) => {
-    const res = await request(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      if (res.status === 401) {
-        promptLogin("登录后才能修改任务。");
-        throw new Error("AUTH_REQUIRED");
+          content: isAuto
+            ? `可用时段变更后自动为 ${plan.length} 条任务重新 AI 排期`
+            : `用户对 ${plan.length} 条任务执行 AI 排期`,
+          event_type: "update",
+          page: "schedule",
+          metadata: {
+            type: isAuto ? "ai_schedule_auto_availability" : "ai_schedule_existing",
+            source: data.source ?? "unknown",
+          },
+        }).catch(() => {});
+      } catch (err) {
+        if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
+        alert(err instanceof Error ? err.message : "AI 排期失败，请重试");
+      } finally {
+        setAiLoading(false);
       }
-      throw new Error(await readApiError(res));
-    }
-
-    const updated = (await res.json()) as ScheduleTask;
-    setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-    emitClientEvent(TASKS_CHANGED_EVENT);
-    return updated;
-  };
+    },
+    [
+      aiLoading,
+      availabilitySlots,
+      canEdit,
+      pendingTasks,
+      promptLogin,
+      updateTaskById,
+    ]
+  );
 
   const deleteTaskById = async (id: number) => {
     if (!canEdit) {
@@ -473,13 +580,20 @@ export function ScheduleScreen() {
     );
   }
 
-  const aiLabel = aiLoading
+  const scheduleButtonDisabled =
+    aiLoading || pendingTasks.length === 0 || validAvailabilityCount === 0;
+
+  const scheduleButtonLabel = aiLoading
     ? "AI 排期中..."
     : pendingTasks.length === 0
-      ? "请先添加待办"
+      ? "暂无待排任务"
       : validAvailabilityCount === 0
         ? "先设可用时段"
-        : `AI 出征（${pendingTasks.length} 条）`;
+        : scheduleRefreshHint?.isReschedule
+          ? "重新排期"
+          : scheduleRefreshHint
+            ? "排期"
+            : "排期";
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col">
@@ -491,10 +605,6 @@ export function ScheduleScreen() {
         scheduledCount={scheduledCount}
         availabilityCount={availabilitySlots.length}
         questSteps={questSteps}
-        aiLoading={aiLoading}
-        aiDisabled={aiLoading || pendingTasks.length === 0 || validAvailabilityCount === 0}
-        aiLabel={aiLabel}
-        onAiSchedule={() => void handleAiSchedule()}
         onOpenAddTask={() => setAddTaskOpen(true)}
         onRequireLogin={promptLogin}
         tasksPanel={
@@ -525,7 +635,24 @@ export function ScheduleScreen() {
             variant="game"
           />
         }
-        calendarPanel={<ScheduleCalendar tasks={tasks} embedded />}
+        scheduleCalendarHidden={schedulePromptOpen}
+        scheduleOverlay={
+          scheduleRefreshHint ? (
+            <SchedulePromptOverlay
+              open={schedulePromptOpen}
+              reasons={scheduleRefreshHint.reasons}
+              isReschedule={scheduleRefreshHint.isReschedule}
+              loading={aiLoading}
+              buttonDisabled={scheduleButtonDisabled}
+              buttonLabel={scheduleButtonLabel}
+              onSchedule={() => void handleAiSchedule({ auto: false })}
+              onViewCalendar={() => setSchedulePromptOpen(false)}
+            />
+          ) : null
+        }
+        schedulePanel={
+          <ScheduleCalendar key={calendarRefreshKey} tasks={tasks} embedded />
+        }
       />
 
       <TaskAddDialog
