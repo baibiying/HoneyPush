@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Calendar, Clock, Award, ExternalLink } from "lucide-react";
 import { request } from "@/lib/api/request";
+import { useAuth } from "@/components/auth/auth-provider";
+import { AUTH_CHANGED_EVENT, STATS_CHANGED_EVENT } from "@/lib/client-events";
 
 interface Session {
   id: number;
@@ -33,22 +35,50 @@ const OFFICER_NAMES: Record<string, string> = {
 };
 
 export function ArchiveScreen() {
+  const { user, loading: authLoading, openAuthModal } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading || !user) return;
+
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) setLoading(true);
+    });
     Promise.all([
-      request("/api/sessions").then((r) => r.ok ? r.json() : []),
-      request("/api/stats").then((r) => r.ok ? r.json() : null),
+      request("/api/sessions", { cache: "no-store" }).then((r) => r.ok ? r.json() : []),
+      request("/api/stats", { cache: "no-store" }).then((r) => r.ok ? r.json() : null),
     ])
       .then(([s, st]) => {
+        if (cancelled) return;
         setSessions(Array.isArray(s) ? s : []);
         setStats(st ?? null);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    const refresh = () => {
+      void Promise.all([
+        request("/api/sessions", { cache: "no-store" }).then((r) => r.ok ? r.json() : []),
+        request("/api/stats", { cache: "no-store" }).then((r) => r.ok ? r.json() : null),
+      ]).then(([s, st]) => {
+        setSessions(Array.isArray(s) ? s : []);
+        setStats(st ?? null);
+      });
+    };
+
+    window.addEventListener(STATS_CHANGED_EVENT, refresh);
+    window.addEventListener(AUTH_CHANGED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(STATS_CHANGED_EVENT, refresh);
+      window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+    };
+  }, [authLoading, user]);
 
   // Build heatmap from sessions (last 24 days)
   const heatmap = Array.from({ length: 24 }, (_, i) => {
@@ -78,6 +108,26 @@ export function ArchiveScreen() {
           ))}
         </div>
         <div className="mt-6 h-64 skeleton rounded"></div>
+      </div>
+    );
+  }
+
+  if (!authLoading && !user) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 pb-12">
+        <div className="bg-white p-6 comic-border comic-shadow-lg text-center space-y-4">
+          <h3 className="font-bangers text-3xl text-[#1C1917] tracking-wider">ARCHIVE LOCKED</h3>
+          <p className="text-sm font-semibold text-neutral-600">
+            登录 HoneyPush 后即可查看你的专注记录、连续天数和专注币统计。
+          </p>
+          <button
+            type="button"
+            onClick={() => openAuthModal("login", "登录后即可查看个人档案战报。")}
+            className="bg-[#F15A24] hover:bg-[#d74d1f] text-white text-sm font-bold py-2.5 px-5 border-2 border-black comic-shadow-sm"
+          >
+            登录查看档案
+          </button>
+        </div>
       </div>
     );
   }

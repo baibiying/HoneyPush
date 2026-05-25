@@ -22,6 +22,9 @@ export const tasks = pgTable("tasks", {
   durationMinutes: integer("duration_minutes").notNull().default(25),
   category: varchar("category", { length: 64 }).notNull().default("import-urgent"),
   checked: boolean("checked").notNull().default(false),
+  deadline: timestamp("deadline"),
+  scheduledStartAt: timestamp("scheduled_start_at"),
+  scheduledEndAt: timestamp("scheduled_end_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

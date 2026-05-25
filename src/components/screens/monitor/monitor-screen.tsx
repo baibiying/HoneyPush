@@ -11,12 +11,33 @@ import { memory } from "@eazo/sdk";
 import { QuickDispatch } from "./quick-dispatch";
 import { TodoList } from "./todo-list";
 import { OfficerSelectModal } from "./officer-select-modal";
+import { request } from "@/lib/api/request";
+import { useAuth } from "@/components/auth/auth-provider";
+import {
+  STATS_CHANGED_EVENT,
+  TASKS_CHANGED_EVENT,
+  emitClientEvent,
+} from "@/lib/client-events";
 
 type LogEntry = { time: string; text: string; type: "normal" | "warning" | "success" };
+type Task = {
+  id: number;
+  text: string;
+  durationMinutes: number;
+  category: string;
+  checked: boolean;
+};
 
 function getNowStr() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
 }
+
+const PRIORITY_ORDER = [
+  "import-urgent",
+  "import-noturgent",
+  "notimport-urgent",
+  "notimport-noturgent",
+];
 
 function playBeep() {
   try {
@@ -55,6 +76,7 @@ function playChime() {
 }
 
 export function MonitorScreen() {
+  const { user, loading: authLoading, promptLogin } = useAuth();
   const [currentOfficerId, setCurrentOfficerId] = useState("yuri");
   const [timer, setTimer] = useState(1500);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -62,6 +84,7 @@ export function MonitorScreen() {
   const [mockEventText, setMockEventText] = useState("一切正常");
   const [distractionCount, setDistractionCount] = useState(0);
   const [topTaskText, setTopTaskText] = useState("");
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([
     { time: "00:00:00", text: "系统启动 - 1950s 显像模式已激活", type: "normal" },
   ]);
@@ -73,24 +96,97 @@ export function MonitorScreen() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeOfficer = OFFICERS.find((o) => o.id === currentOfficerId) ?? OFFICERS[0];
 
+  const syncTopTask = useCallback((items: Task[], activeTask?: string | null) => {
+    if (activeTask?.trim()) {
+      setTopTaskText(activeTask);
+      return;
+    }
+
+    const top = PRIORITY_ORDER
+      .flatMap((category) => items.filter((task) => !task.checked && task.category === category))
+      .find(Boolean);
+
+    setTopTaskText(top?.text ?? "");
+  }, []);
+
   const addLog = useCallback((text: string, type: LogEntry["type"] = "normal") => {
     setLogs((prev) => [{ time: getNowStr(), text, type }, ...prev.slice(0, 20)]);
   }, []);
 
-  // 从 localStorage 读取最高优先级任务显示在计时器上方
   useEffect(() => {
+    if (authLoading) return;
+
+    const activeTaskText = selectedTask?.text ?? null;
+    let cancelled = false;
+
+    const syncTasks = async () => {
+      if (!user) {
+        Promise.resolve().then(() => {
+          if (cancelled) return;
+          setTasks([]);
+          setSelectedTask(null);
+          syncTopTask([], null);
+        });
+        return;
+      }
+
+      try {
+        const res = await request("/api/tasks", { cache: "no-store" });
+        if (!res.ok) {
+          if (cancelled) return;
+          setTasks([]);
+          syncTopTask([], null);
+          return;
+        }
+
+        const items = (await res.json()) as Task[];
+        if (cancelled) return;
+        setTasks(items);
+        syncTopTask(items, activeTaskText);
+      } catch {
+        if (cancelled) return;
+        setTasks([]);
+        syncTopTask([], null);
+      }
+    };
+
+    Promise.resolve().then(() => {
+      void syncTasks();
+    });
+    const refresh = () => {
+      void syncTasks();
+    };
+
+    window.addEventListener(TASKS_CHANGED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TASKS_CHANGED_EVENT, refresh);
+    };
+  }, [authLoading, selectedTask, syncTopTask, user]);
+
+  const persistCompletedSession = useCallback(async () => {
+    if (!user) {
+      addLog("当前为游客模式，本轮专注未保存到账号", "normal");
+      return;
+    }
+
     try {
-      const saved = localStorage.getItem("focus-bureau-tasks");
-      if (!saved) return;
-      const tasks: Array<{ text: string; checked: boolean; category: string }> = JSON.parse(saved);
-      if (!Array.isArray(tasks)) return;
-      const priority = ["import-urgent", "import-noturgent", "notimport-urgent", "notimport-noturgent"];
-      const top = priority
-        .flatMap((cat) => tasks.filter((t) => !t.checked && t.category === cat))
-        .find(Boolean);
-      if (top) setTopTaskText(top.text);
-    } catch { /* ignore */ }
-  }, []);
+      const res = await request("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          officerId: currentOfficerId,
+          distractionCount,
+        }),
+      });
+
+      if (res.ok) {
+        emitClientEvent(STATS_CHANGED_EVENT);
+      }
+    } catch {
+      addLog("专注记录保存失败，请稍后重试", "warning");
+    }
+  }, [addLog, currentOfficerId, distractionCount, user]);
 
   // Timer tick
   useEffect(() => {
@@ -100,11 +196,7 @@ export function MonitorScreen() {
           if (prev <= 1) {
             setTimerRunning(false);
             playChime();
-            // 专注完成 — 本地记录专注币
-            try {
-              const prev = parseInt(localStorage.getItem("focus-bureau-coins") ?? "0", 10);
-              localStorage.setItem("focus-bureau-coins", String(prev + 15));
-            } catch { /* ignore */ }
+            void persistCompletedSession();
             memory.reportAction({
               content: `用户完成一轮25分钟专注，监督官：${activeOfficer.name}，被抓次数：${distractionCount}`,
               event_type: "create",
@@ -122,7 +214,14 @@ export function MonitorScreen() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [timerRunning, currentOfficerId, distractionCount, activeOfficer.name, addLog]);
+  }, [
+    timerRunning,
+    currentOfficerId,
+    distractionCount,
+    activeOfficer.name,
+    addLog,
+    persistCompletedSession,
+  ]);
 
   const handleToggle = () => {
     playChime();
@@ -171,9 +270,43 @@ export function MonitorScreen() {
   };
 
   // 处理任务开始流程
-  const handleTaskStart = (task: { id: number; text: string; category: string; checked: boolean }) => {
+  const handleTaskStart = (task: Task) => {
+    if (!user) {
+      promptLogin("登录后才能启动任务并保存专注记录。");
+      return;
+    }
     setSelectedTask({ id: task.id, text: task.text });
     setShowOfficerModal(true);
+  };
+
+  const handleToggleTask = async (task: Task) => {
+    if (!user) {
+      promptLogin("登录后才能修改任务状态。");
+      return;
+    }
+
+    try {
+      const res = await request(`/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checked: !task.checked }),
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) promptLogin("登录后才能修改任务状态。");
+        throw new Error("PATCH_TASK_FAILED");
+      }
+
+      const updated = (await res.json()) as Task;
+      setTasks((prev) => {
+        const next = prev.map((item) => (item.id === updated.id ? updated : item));
+        syncTopTask(next, selectedTask?.text ?? null);
+        return next;
+      });
+      emitClientEvent(TASKS_CHANGED_EVENT);
+    } catch {
+      addLog("任务状态更新失败", "warning");
+    }
   };
 
   const handleLaunch = (officerId: string) => {
@@ -257,15 +390,27 @@ export function MonitorScreen() {
       <section className="lg:col-span-4 space-y-4">
         <QuickDispatch
           topTaskText={topTaskText}
-          onTaskAdded={(text) => {
-            setTopTaskText(text);
+          canEdit={Boolean(user)}
+          onRequireLogin={() => promptLogin("登录后才能创建并保存任务。")}
+          onTaskAdded={(task) => {
+            setTasks((prev) => {
+              const next = [task, ...prev];
+              syncTopTask(next, selectedTask?.text ?? null);
+              return next;
+            });
+            setTopTaskText(task.text);
             playChime();
-            addLog(`快速添加任务：${text}`, "success");
+            addLog(`快速添加任务：${task.text}`, "success");
           }}
         />
 
-        {/* 任务待办清单 — 从 localStorage 读取 AI 排期的任务 */}
-        <TodoList onTaskStart={handleTaskStart} />
+        <TodoList
+          tasks={tasks}
+          canEdit={Boolean(user)}
+          onRequireLogin={() => promptLogin("登录后才能查看并同步你的任务列表。")}
+          onToggleTask={handleToggleTask}
+          onTaskStart={handleTaskStart}
+        />
 
         {/* Officer quotes reference card */}
         <div className="bg-white p-5 comic-border comic-shadow-sm">

@@ -1,18 +1,20 @@
-import { requireAuth } from "@/lib/auth";
+import { requireUser } from "@/lib/auth/session";
 import { getUserStats, upsertUserStats } from "@/lib/db/queries";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
-  const result = requireAuth(req);
+  const result = await requireUser(req);
   if (!result.ok) return result.response;
   const { id: userId } = result.user;
 
   const stats = await getUserStats(userId);
-  return NextResponse.json(stats ?? { totalCoins: 0, consecutiveDays: 0, totalSessions: 0 });
+  return NextResponse.json(
+    stats ?? { totalCoins: 0, consecutiveDays: 0, totalSessions: 0, unlockedBadges: [] }
+  );
 }
 
 export async function POST(req: NextRequest) {
-  const result = requireAuth(req);
+  const result = await requireUser(req);
   if (!result.ok) return result.response;
   const { id: userId } = result.user;
 

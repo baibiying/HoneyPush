@@ -1,9 +1,9 @@
-import { requireAuth } from "@/lib/auth";
-import { createFocusSession, getFocusSessions } from "@/lib/db/queries";
+import { requireUser } from "@/lib/auth/session";
+import { createFocusSession, getFocusSessions, upsertUserStats } from "@/lib/db/queries";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
-  const result = requireAuth(req);
+  const result = await requireUser(req);
   if (!result.ok) return result.response;
   const { id: userId } = result.user;
 
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const result = requireAuth(req);
+  const result = await requireUser(req);
   if (!result.ok) return result.response;
   const { id: userId } = result.user;
 
@@ -21,5 +21,6 @@ export async function POST(req: NextRequest) {
   const distractionCount = body.distractionCount ?? 0;
 
   const session = await createFocusSession(userId, officerId, distractionCount);
-  return NextResponse.json(session);
+  const stats = await upsertUserStats(userId, session.coinsEarned);
+  return NextResponse.json({ session, stats });
 }

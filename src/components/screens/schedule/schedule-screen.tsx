@@ -1,30 +1,44 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Mic } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import { memory } from "@eazo/sdk";
+import { request } from "@/lib/api/request";
+import { useAuth } from "@/components/auth/auth-provider";
+import { TASKS_CHANGED_EVENT, emitClientEvent } from "@/lib/client-events";
+import { TaskAddDialog } from "./task-add-dialog";
+import { TaskEditDialog, type ScheduleTask } from "./task-edit-dialog";
+import { QuadrantTaskBoard } from "./quadrant-task-board";
+import { ScheduleCalendar } from "./schedule-calendar";
+import { ScheduleGameHub, type ScheduleScene } from "./schedule-game-hub";
+import {
+  AvailabilityEditor,
+  toAvailabilityRows,
+  type AvailabilitySlotRow,
+} from "./availability-editor";
+import { buildAvailabilityWindows, type AvailabilitySlotInput } from "@/lib/ai/availability";
 
-interface Task {
-  id: number;
-  text: string;
-  durationMinutes: number;
-  category: string;
-  checked: boolean;
+const AVAILABILITY_STORAGE_KEY = "honeypush-availability-v1";
+
+function loadAvailabilitySlots(): AvailabilitySlotRow[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(AVAILABILITY_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as AvailabilitySlotInput[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return toAvailabilityRows(parsed);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
 }
-
-const CATEGORIES: Record<string, { label: string; shortLabel: string; bg: string; headerBg: string; border: string; headerText: string }> = {
-  "import-urgent":       { label: "A 象限 · 绝密要紧", shortLabel: "A", bg: "bg-rose-50",   headerBg: "bg-[#E11D48]", border: "border-rose-300",  headerText: "text-white" },
-  "import-noturgent":    { label: "B 象限 · 精深核心", shortLabel: "B", bg: "bg-amber-50",  headerBg: "bg-amber-500", border: "border-amber-300", headerText: "text-white" },
-  "notimport-urgent":    { label: "C 象限 · 快速流转", shortLabel: "C", bg: "bg-sky-50",    headerBg: "bg-sky-600",   border: "border-sky-200",   headerText: "text-white" },
-  "notimport-noturgent": { label: "D 象限 · 尽量废除", shortLabel: "D", bg: "bg-stone-100", headerBg: "bg-stone-600", border: "border-stone-200", headerText: "text-white" },
-};
-
-const STORAGE_KEY = "focus-bureau-tasks";
 
 function playChime() {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const ctx = new (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -34,285 +48,502 @@ function playChime() {
     osc.frequency.setValueAtTime(783.99, now + 0.16);
     gain.gain.setValueAtTime(0.12, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(now + 0.4);
-  } catch { /* ignore */ }
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(now + 0.4);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function readApiError(res: Response) {
+  const data = await res.json().catch(() => null);
+  return (data?.error as string | undefined) ?? "操作失败，请稍后重试";
 }
 
 export function ScheduleScreen() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const { user, loading: authLoading, promptLogin } = useAuth();
+  const [tasks, setTasks] = useState<ScheduleTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newTaskText, setNewTaskText] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("import-urgent");
-  const [aiInput, setAiInput] = useState("");
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [addingTask, setAddingTask] = useState(false);
+  const [availabilitySlots, setAvailabilitySlots] = useState(loadAvailabilitySlots);
   const [aiLoading, setAiLoading] = useState(false);
-  const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<{ stop: () => void } | null>(null);
+  const [editingTask, setEditingTask] = useState<ScheduleTask | null>(null);
+  const [openTaskMenuId, setOpenTaskMenuId] = useState<number | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [scene, setScene] = useState<ScheduleScene>("map");
 
-  // 从 localStorage 加载
+  const canEdit = Boolean(user);
+
+  const stats = useMemo(() => {
+    const pending = tasks.filter((task) => !task.checked).length;
+    const done = tasks.length - pending;
+    return { total: tasks.length, pending, done };
+  }, [tasks]);
+
+  const pendingTasks = useMemo(
+    () => tasks.filter((task) => !task.checked),
+    [tasks]
+  );
+
+  const scheduledCount = useMemo(
+    () =>
+      pendingTasks.filter((task) => task.scheduledStartAt && task.scheduledEndAt).length,
+    [pendingTasks]
+  );
+
+  const validAvailabilityCount = useMemo(() => {
+    const payload = availabilitySlots.map(({ date, startTime, endTime }) => ({
+      date,
+      startTime,
+      endTime,
+    }));
+    return buildAvailabilityWindows(payload).length;
+  }, [availabilitySlots]);
+
+  const questSteps = useMemo(
+    () => [
+      {
+        id: "collect",
+        label: "创建任务",
+        done: pendingTasks.length > 0,
+        scene: "tasks" as const,
+      },
+      {
+        id: "time",
+        label: "可用时段",
+        done: validAvailabilityCount > 0,
+        scene: "time" as const,
+      },
+      {
+        id: "battle",
+        label: "AI 出征",
+        done: scheduledCount > 0,
+        scene: "time" as const,
+      },
+      {
+        id: "report",
+        label: "查看战况",
+        done: scheduledCount > 0,
+        scene: "calendar" as const,
+      },
+    ],
+    [pendingTasks.length, validAvailabilityCount, scheduledCount]
+  );
+
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setTasks(Array.isArray(parsed) ? parsed : []);
+    const payload = availabilitySlots.map(({ date, startTime, endTime }) => ({
+      date,
+      startTime,
+      endTime,
+    }));
+    localStorage.setItem(AVAILABILITY_STORAGE_KEY, JSON.stringify(payload));
+  }, [availabilitySlots]);
+
+  useEffect(() => {
+    if (openTaskMenuId === null) return;
+    const close = () => setOpenTaskMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openTaskMenuId]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    let cancelled = false;
+
+    const syncTasks = async () => {
+      if (!user) {
+        Promise.resolve().then(() => {
+          if (cancelled) return;
+          setTasks([]);
+          setLoading(false);
+        });
+        return;
       }
-    } catch {
-      setTasks([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
-  // 任务变化时自动保存
-  useEffect(() => {
-    if (!loading) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-    }
-  }, [tasks, loading]);
+      Promise.resolve().then(() => {
+        if (!cancelled) setLoading(true);
+      });
 
-  const handleAddTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskText.trim()) return;
-    const newTask: Task = {
-      id: Date.now(),
-      text: newTaskText,
-      durationMinutes: 25,
-      category: selectedCategory,
-      checked: false,
+      try {
+        const res = await request("/api/tasks", { cache: "no-store" });
+        if (!res.ok) {
+          if (cancelled) return;
+          setTasks([]);
+          return;
+        }
+
+        const items = (await res.json()) as ScheduleTask[];
+        if (cancelled) return;
+        setTasks(items);
+      } catch {
+        if (cancelled) return;
+        setTasks([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    setTasks((prev) => [newTask, ...prev]);
-    setNewTaskText("");
-    playChime();
-    memory.reportAction({
-      content: `用户手动添加任务到 ${CATEGORIES[selectedCategory]?.label}：${newTaskText}`,
-      event_type: "create",
-      page: "schedule",
-      metadata: { type: "add_task", category: selectedCategory },
-    }).catch(() => {});
+
+    Promise.resolve().then(() => {
+      void syncTasks();
+    });
+
+    const refresh = () => {
+      void syncTasks();
+    };
+
+    window.addEventListener(TASKS_CHANGED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TASKS_CHANGED_EVENT, refresh);
+    };
+  }, [authLoading, user]);
+
+  const createTask = async (input: {
+    text: string;
+    category: string;
+    durationMinutes?: number;
+    deadline: string;
+  }) => {
+    const res = await request("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        promptLogin("登录后才能把任务保存到 HoneyPush。");
+        throw new Error("AUTH_REQUIRED");
+      }
+      throw new Error(await readApiError(res));
+    }
+
+    const task = (await res.json()) as ScheduleTask;
+    emitClientEvent(TASKS_CHANGED_EVENT);
+    return task;
+  };
+
+  const handleAddTaskSubmit = async (payload: {
+    text: string;
+    category: string;
+    durationMinutes: number;
+    deadline: string;
+  }) => {
+    if (!canEdit) {
+      promptLogin("登录后才能创建并保存任务。");
+      return;
+    }
+
+    setAddingTask(true);
+    try {
+      const task = await createTask({
+        text: payload.text,
+        category: payload.category,
+        durationMinutes: payload.durationMinutes,
+        deadline: payload.deadline,
+      });
+      setTasks((prev) => [task, ...prev]);
+      setAddTaskOpen(false);
+      playChime();
+      memory.reportAction({
+        content: `用户添加任务：${task.text}`,
+        event_type: "create",
+        page: "schedule",
+        metadata: { type: "add_task" },
+      }).catch(() => {});
+    } catch (err) {
+      if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
+      alert(err instanceof Error ? err.message : "添加失败，请重试");
+    } finally {
+      setAddingTask(false);
+    }
   };
 
   const handleAiSchedule = async () => {
-    if (!aiInput.trim()) return;
+    if (!canEdit) {
+      promptLogin("登录后才能使用 AI 排期。");
+      return;
+    }
+
+    if (pendingTasks.length === 0) {
+      alert("请先在「添加任务」里添加至少一条待办。");
+      return;
+    }
+
+    const missingDeadline = pendingTasks.filter((task) => !task.deadline);
+    if (missingDeadline.length > 0) {
+      alert("请为每条待排期任务填写截止时间后再执行 AI 排期。");
+      return;
+    }
+
+    const availability = availabilitySlots.map(({ date, startTime, endTime }) => ({
+      date,
+      startTime,
+      endTime,
+    }));
+    if (availability.length === 0) {
+      alert("请至少添加一个今天或未来几天的可用时间段。");
+      return;
+    }
+    if (buildAvailabilityWindows(availability).length === 0) {
+      alert("可用时间段均已过期，请添加今天或未来的时段后再排期。");
+      return;
+    }
+
     setAiLoading(true);
     try {
-      const aiTasks: Task[] = [
-        { id: Date.now(),     text: `【AI排期】${aiInput}（核心攻坚）`, durationMinutes: 25, category: "import-urgent",    checked: false },
-        { id: Date.now() + 1, text: `【AI排期】${aiInput}（细项拆解）`, durationMinutes: 25, category: "import-noturgent", checked: false },
-      ];
-      setTasks((prev) => [...aiTasks, ...prev]);
-      setAiInput("");
+      const res = await request("/api/ai-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          availability,
+          tasks: pendingTasks.map((task) => ({
+            id: task.id,
+            text: task.text,
+            durationMinutes: task.durationMinutes,
+            category: task.category,
+            deadline: task.deadline,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          promptLogin("登录后才能使用 AI 排期。");
+          return;
+        }
+        throw new Error(await readApiError(res));
+      }
+
+      const data = (await res.json()) as {
+        schedule?: Array<{
+          id: number;
+          category: string;
+          durationMinutes: number;
+          order: number;
+          scheduledStartAt: string;
+          scheduledEndAt: string;
+        }>;
+        unscheduledIds?: number[];
+        source?: string;
+      };
+
+      const plan = Array.isArray(data.schedule) ? data.schedule : [];
+      if (plan.length === 0) {
+        alert("在可用时间段内无法排下任何任务，请增加未来几天的时段或缩短任务时长。");
+        return;
+      }
+
+      const updatedTasks = await Promise.all(
+        plan.map((item) =>
+          updateTaskById(item.id, {
+            category: item.category,
+            durationMinutes: item.durationMinutes,
+            scheduledStartAt: item.scheduledStartAt,
+            scheduledEndAt: item.scheduledEndAt,
+          })
+        )
+      );
+
+      setTasks((prev) =>
+        prev.map((task) => updatedTasks.find((item) => item.id === task.id) ?? task)
+      );
+
+      const unscheduled = Array.isArray(data.unscheduledIds) ? data.unscheduledIds : [];
+      if (unscheduled.length > 0) {
+        alert(
+          `已排期 ${plan.length} 条任务。另有 ${unscheduled.length} 条在可用时段内排不下，请增加明天或之后的时间段后重试。`
+        );
+      }
+
       playChime();
+      setScene("calendar");
       memory.reportAction({
-        content: `用户使用 AI 智能排期：${aiInput}`,
-        event_type: "create",
+        content: `用户对 ${plan.length} 条任务执行 AI 排期`,
+        event_type: "update",
         page: "schedule",
-        metadata: { type: "ai_schedule" },
+        metadata: { type: "ai_schedule_existing", source: data.source ?? "unknown" },
       }).catch(() => {});
+    } catch (err) {
+      if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
+      alert(err instanceof Error ? err.message : "AI 排期失败，请重试");
     } finally {
       setAiLoading(false);
     }
   };
 
-  const toggleTask = (id: number) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, checked: !t.checked } : t)));
+  const updateTaskById = async (
+    id: number,
+    payload: Partial<
+      Pick<
+        ScheduleTask,
+        | "text"
+        | "checked"
+        | "category"
+        | "durationMinutes"
+        | "deadline"
+        | "scheduledStartAt"
+        | "scheduledEndAt"
+      >
+    >
+  ) => {
+    const res = await request(`/api/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        promptLogin("登录后才能修改任务。");
+        throw new Error("AUTH_REQUIRED");
+      }
+      throw new Error(await readApiError(res));
+    }
+
+    const updated = (await res.json()) as ScheduleTask;
+    setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    emitClientEvent(TASKS_CHANGED_EVENT);
+    return updated;
   };
 
-  const handleVoiceInput = () => {
-    // 如果正在录音，停止
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
+  const deleteTaskById = async (id: number) => {
+    if (!canEdit) {
+      promptLogin("登录后才能删除任务。");
       return;
     }
 
-    // @ts-expect-error SpeechRecognition 实验性 API
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("当前浏览器不支持语音输入，推荐使用 Chrome 浏览器");
-      return;
+    if (!window.confirm("确定删除这个任务吗？")) return;
+
+    try {
+      const res = await request(`/api/tasks/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        if (res.status === 401) {
+          promptLogin("登录后才能删除任务。");
+          return;
+        }
+        throw new Error(await readApiError(res));
+      }
+
+      setTasks((prev) => prev.filter((task) => task.id !== id));
+      emitClientEvent(TASKS_CHANGED_EVENT);
+    } catch (err) {
+      if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
+      alert(err instanceof Error ? err.message : "删除失败，请重试");
     }
+  };
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "zh-CN";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+  const handleSaveEdit = async (payload: {
+    text: string;
+    category: string;
+    durationMinutes: number;
+    deadline: string;
+  }) => {
+    if (!editingTask) return;
 
-    recognition.onstart = () => setListening(true);
-
-    recognition.onresult = (event: { results: { [key: number]: { [key: number]: { transcript: string } } } }) => {
-      const transcript = event.results[0][0].transcript.trim();
-      if (!transcript) return;
-      setListening(false);
-      playChime();
-
-      // 直接创建任务，不需要用户再点提交
-      const newTask: Task = {
-        id: Date.now(),
-        text: transcript,
-        durationMinutes: 25,
-        category: selectedCategory,
-        checked: false,
-      };
-      setTasks((prev) => {
-        const updated = [newTask, ...prev];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        return updated;
+    setSavingEdit(true);
+    try {
+      await updateTaskById(editingTask.id, {
+        ...payload,
+        scheduledStartAt: null,
+        scheduledEndAt: null,
       });
-      setNewTaskText(transcript); // 同步显示到输入框
-      memory.reportAction({
-        content: `用户语音添加任务：${transcript}`,
-        event_type: "create",
-        page: "schedule",
-        metadata: { type: "voice_add_task", category: selectedCategory },
-      }).catch(() => {});
-    };
-
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  const deleteTask = (id: number) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+      setEditingTask(null);
+      playChime();
+    } catch (err) {
+      if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
+      alert(err instanceof Error ? err.message : "保存失败，请重试");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 pb-12 flex items-center justify-center min-h-[400px]">
-        <div className="text-neutral-500 font-comic">加载中...</div>
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <p className="font-bangers text-2xl text-[#1C1917]">加载副本中...</p>
+          <p className="text-sm font-comic text-neutral-500">正在同步你的任务存档</p>
+        </div>
       </div>
     );
   }
 
+  const aiLabel = aiLoading
+    ? "AI 排期中..."
+    : pendingTasks.length === 0
+      ? "请先添加待办"
+      : validAvailabilityCount === 0
+        ? "先设可用时段"
+        : `AI 出征（${pendingTasks.length} 条）`;
+
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 pb-12 space-y-6">
-
-      {/* AI 智能规划 */}
-      <div className="bg-[#FAF6A2] p-5 comic-border comic-shadow">
-        <div className="flex items-center gap-2 pb-2 mb-3 border-b-2 border-[#1C1917]">
-          <Mic className="w-5 h-5 text-neutral-800" />
-          <h4 className="font-bold text-base tracking-wider font-comic">快速添加任务</h4>
-        </div>
-        <div className="space-y-3">
-          <textarea
-            value={aiInput}
-            onChange={(e) => setAiInput(e.target.value)}
-            placeholder="输入「高数冲刺2小时要交」、「英语精读15页」，AI 自动切片并排入四象限日程..."
-            className="w-full h-20 p-3 text-base font-semibold bg-white border-2 border-black focus:outline-none focus:ring-2 focus:ring-yellow-400 text-neutral-900 placeholder-neutral-400 resize-none"
+    <div className="w-full h-full min-h-0 flex flex-col">
+      <ScheduleGameHub
+        scene={scene}
+        onSceneChange={setScene}
+        canEdit={canEdit}
+        stats={stats}
+        scheduledCount={scheduledCount}
+        availabilityCount={availabilitySlots.length}
+        questSteps={questSteps}
+        aiLoading={aiLoading}
+        aiDisabled={aiLoading || pendingTasks.length === 0 || validAvailabilityCount === 0}
+        aiLabel={aiLabel}
+        onAiSchedule={() => void handleAiSchedule()}
+        onOpenAddTask={() => setAddTaskOpen(true)}
+        onRequireLogin={promptLogin}
+        tasksPanel={
+          <QuadrantTaskBoard
+            fullscreen
+            tasks={tasks}
+            openTaskMenuId={openTaskMenuId}
+            canEdit={canEdit}
+            onRequireLogin={() => promptLogin("登录后才能编辑或删除任务。")}
+            onMenuToggle={(taskId) =>
+              setOpenTaskMenuId((prev) => (prev === taskId ? null : taskId))
+            }
+            onEdit={(task) => {
+              setOpenTaskMenuId(null);
+              setEditingTask(task);
+            }}
+            onDelete={(taskId) => {
+              setOpenTaskMenuId(null);
+              void deleteTaskById(taskId);
+            }}
           />
-          {/* 象限选择器 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {Object.entries(CATEGORIES).map(([key, cat]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSelectedCategory(key)}
-                className={[
-                  "py-2 px-3 text-xs font-bold border-2 border-black transition-all text-left",
-                  selectedCategory === key
-                    ? `${cat.headerBg} ${cat.headerText} comic-shadow-sm scale-[1.02]`
-                    : "bg-white text-neutral-600 hover:bg-neutral-50",
-                ].join(" ")}
-              >
-                <span className={`inline-block w-5 h-5 text-center font-bangers text-sm mr-1 ${selectedCategory === key ? "text-white" : ""}`}>{cat.shortLabel}</span>
-                <span className="truncate">{cat.label.split("·")[1]?.trim()}</span>
-              </button>
-            ))}
-          </div>
+        }
+        timePanel={
+          <AvailabilityEditor
+            slots={availabilitySlots}
+            onChange={setAvailabilitySlots}
+            showHeader={false}
+            variant="game"
+          />
+        }
+        calendarPanel={<ScheduleCalendar tasks={tasks} embedded />}
+      />
 
-          <div className="flex gap-2">
-            <form onSubmit={handleAddTask} className="flex-1 flex gap-2">
-              <input
-                value={newTaskText}
-                onChange={(e) => setNewTaskText(e.target.value)}
-                placeholder={`输入任务名称 → 加入「${CATEGORIES[selectedCategory]?.label}」`}
-                className="flex-1 px-3 py-2 text-base border-2 border-black focus:outline-none bg-white font-semibold"
-              />
-              <button
-                type="submit"
-                className="bg-white hover:bg-amber-100 text-xs font-bold py-2 px-4 border-2 border-black comic-shadow-sm flex items-center gap-1 text-[#1C1917]"
-              >
-                <Plus className="w-4 h-4" />
-                <span>手动插入</span>
-              </button>
-            </form>
-            <button
-              type="button"
-              onClick={handleVoiceInput}
-              className={[
-                "py-2 px-4 text-xs font-bold border-2 border-black comic-shadow-sm flex items-center gap-1.5 transition-all",
-                listening
-                  ? "bg-rose-500 text-white animate-pulse"
-                  : "bg-neutral-900 hover:bg-neutral-800 text-white",
-              ].join(" ")}
-              title={listening ? "点击停止录音" : "语音输入任务"}
-            >
-              <Mic className="w-4 h-4" />
-              <span>{listening ? "聆听中..." : "语音输入"}</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <TaskAddDialog
+        open={addTaskOpen}
+        saving={addingTask}
+        onOpenChange={setAddTaskOpen}
+        onSubmit={handleAddTaskSubmit}
+      />
 
-      {/* 艾森豪威尔四象限 */}
-      <div className="bg-white p-5 comic-border comic-shadow">
-        <div className="flex justify-between items-center pb-2 mb-3 border-b-2 border-neutral-900">
-          <h4 className="font-black text-sm tracking-wider font-comic">📦 艾森豪威尔·四象限专注日程</h4>
-          <span className="text-[10px] bg-red-400 text-black px-1.5 font-bold border border-black">本地存储</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(CATEGORIES).map(([key, cat]) => {
-            const categoryTasks = tasks.filter((t) => t.category === key);
-            return (
-              <div key={key} className={`${cat.bg} border-2 ${cat.border} p-3`}>
-                <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-neutral-200">
-                  <span className={`text-[10px] ${cat.headerBg} ${cat.headerText} px-2 py-0.5 font-bold`}>
-                    {cat.label}
-                  </span>
-                  <span className="text-[10px] font-bold text-neutral-500">{categoryTasks.length} 项</span>
-                </div>
-
-                <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                  <AnimatePresence>
-                    {categoryTasks.map((t) => (
-                      <motion.div
-                        key={t.id}
-                        initial={{ opacity: 0, x: -16 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 16 }}
-                        className="flex items-start justify-between gap-2 p-1.5 bg-white border border-[#1C1917]"
-                      >
-                        <div className="flex items-start gap-2 flex-1 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={t.checked}
-                            onChange={() => toggleTask(t.id)}
-                            className="w-4 h-4 mt-0.5 border-2 border-black rounded-none cursor-pointer accent-yellow-400 shrink-0"
-                          />
-                          <span className={`text-xs font-bold text-neutral-800 break-words ${t.checked ? "line-through text-gray-400" : ""}`}>
-                            {t.text}
-                          </span>
-                        </div>
-                        <button onClick={() => deleteTask(t.id)} className="text-gray-400 hover:text-red-600 p-0.5 shrink-0">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                  {categoryTasks.length === 0 && (
-                    <div className="text-center text-xs text-neutral-400 py-4 font-comic">暂无任务</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
+      <TaskEditDialog
+        task={editingTask}
+        open={Boolean(editingTask)}
+        saving={savingEdit}
+        onOpenChange={(open) => {
+          if (!open) setEditingTask(null);
+        }}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 }

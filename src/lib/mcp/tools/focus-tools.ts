@@ -31,7 +31,7 @@ export function registerFocusTools(server: McpServer, userId: string) {
       inputSchema: {
         text: z.string().min(1).describe("Task description"),
         category: z.enum(["import-urgent", "import-noturgent", "notimport-urgent", "notimport-noturgent"]).default("import-urgent").describe("Eisenhower quadrant"),
-        durationMinutes: z.number().int().min(5).max(120).default(25).describe("Estimated focus duration in minutes"),
+        durationMinutes: z.number().int().min(5).max(120).default(25).describe("Estimated minutes to complete the task"),
       },
     },
     async ({ text, category, durationMinutes }) => {

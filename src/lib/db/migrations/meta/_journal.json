@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779683072410,
+      "tag": "0000_fluffy_nico_minoru",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779683072411,
+      "tag": "0001_task_schedule_fields",
+      "breakpoints": true
+    }
+  ]
+}

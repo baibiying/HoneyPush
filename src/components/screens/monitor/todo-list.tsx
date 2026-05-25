@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { CheckCircle2, Circle, ListTodo, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 interface Task {
   id: number;
   text: string;
+  durationMinutes: number;
   category: string;
   checked: boolean;
 }
@@ -26,51 +26,21 @@ const CATEGORY_META: Record<string, { label: string; color: string; bg: string; 
   "notimport-noturgent": { label: "D", color: "bg-stone-600", bg: "bg-stone-100", textColor: "text-stone-500" },
 };
 
-const STORAGE_KEY = "focus-bureau-tasks";
-
 interface TodoListProps {
+  tasks: Task[];
+  canEdit: boolean;
+  onRequireLogin: () => void;
+  onToggleTask: (task: Task) => void;
   onTaskStart?: (task: Task) => void;
 }
 
-export function TodoList({ onTaskStart }: TodoListProps) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-
-  // 从 localStorage 读取，并监听其他页面的变更
-  const loadTasks = () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setTasks(Array.isArray(parsed) ? parsed : []);
-      } else {
-        setTasks([]);
-      }
-    } catch {
-      setTasks([]);
-    }
-  };
-
-  useEffect(() => {
-    loadTasks();
-    // 监听 storage 事件（AI 排期页面修改后同步）
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) loadTasks();
-    };
-    window.addEventListener("storage", onStorage);
-    // 每次聚焦页面也刷新一次（同标签页切换）
-    window.addEventListener("focus", loadTasks);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", loadTasks);
-    };
-  }, []);
-
-  const toggleTask = (id: number) => {
-    const updated = tasks.map((t) => (t.id === id ? { ...t, checked: !t.checked } : t));
-    setTasks(updated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  };
-
+export function TodoList({
+  tasks,
+  canEdit,
+  onRequireLogin,
+  onToggleTask,
+  onTaskStart,
+}: TodoListProps) {
   // 按 A→B→C→D 顺序排列，未完成的在前
   const sorted = [...tasks].sort((a, b) => {
     const ai = CATEGORY_ORDER.indexOf(a.category);
@@ -101,13 +71,25 @@ export function TodoList({ onTaskStart }: TodoListProps) {
 
       {tasks.length === 0 ? (
         <div className="text-center py-6 space-y-2">
-          <p className="text-xs text-neutral-400 font-comic">还没有任务</p>
-          <Link
-            href="/schedule"
-            className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 underline"
-          >
-            前往 AI 排期添加 <ArrowRight className="w-3 h-3" />
-          </Link>
+          <p className="text-xs text-neutral-400 font-comic">
+            {canEdit ? "还没有任务" : "登录后即可同步任务到你的账号"}
+          </p>
+          {canEdit ? (
+            <Link
+              href="/schedule"
+              className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 underline"
+            >
+              前往 AI 排期添加 <ArrowRight className="w-3 h-3" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={onRequireLogin}
+              className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 underline"
+            >
+              登录后开始保存 <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-0.5">
@@ -121,7 +103,13 @@ export function TodoList({ onTaskStart }: TodoListProps) {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   className={`flex items-start gap-2 p-2 border border-[#1C1917] ${meta.bg} cursor-pointer group hover:bg-opacity-80 transition-colors`}
-                  onClick={() => onTaskStart?.(task)}
+                  onClick={() => {
+                    if (!canEdit) {
+                      onRequireLogin();
+                      return;
+                    }
+                    onTaskStart?.(task);
+                  }}
                 >
                   <Circle className="w-4 h-4 mt-0.5 shrink-0 text-neutral-400 group-hover:text-emerald-500 transition-colors" />
                   <div className="flex-1 min-w-0">
@@ -150,7 +138,13 @@ export function TodoList({ onTaskStart }: TodoListProps) {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="flex items-start gap-2 p-2 border border-neutral-200 bg-neutral-50 cursor-pointer opacity-60"
-                      onClick={() => toggleTask(task.id)}
+                      onClick={() => {
+                        if (!canEdit) {
+                          onRequireLogin();
+                          return;
+                        }
+                        onToggleTask(task);
+                      }}
                     >
                       <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-500" />
                       <span className="text-xs text-neutral-400 line-through flex-1 break-words">{task.text}</span>

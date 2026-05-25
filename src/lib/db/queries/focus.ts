@@ -1,4 +1,4 @@
-import { eq, desc, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../client";
 import { focusSessions, tasks, userStats } from "../schema";
 import type { Task } from "../schema/focus-sessions";
@@ -36,11 +36,12 @@ export async function createTask(
   userId: string,
   text: string,
   category: string = "import-urgent",
-  durationMinutes: number = 25
+  durationMinutes: number = 25,
+  deadline?: Date | null
 ) {
   const rows = await db
     .insert(tasks)
-    .values({ userId, text, category, durationMinutes })
+    .values({ userId, text, category, durationMinutes, deadline: deadline ?? null })
     .returning();
   return rows[0];
 }
@@ -48,12 +49,23 @@ export async function createTask(
 export async function updateTask(
   id: number,
   userId: string,
-  data: Partial<Pick<Task, "text" | "checked" | "category">>
+  data: Partial<
+    Pick<
+      Task,
+      | "text"
+      | "checked"
+      | "category"
+      | "durationMinutes"
+      | "deadline"
+      | "scheduledStartAt"
+      | "scheduledEndAt"
+    >
+  >
 ) {
   const rows = await db
     .update(tasks)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(tasks.id, id))
+    .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
     .returning();
   return rows[0];
 }
@@ -61,7 +73,7 @@ export async function updateTask(
 export async function deleteTask(id: number, userId: string) {
   const rows = await db
     .delete(tasks)
-    .where(eq(tasks.id, id))
+    .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
     .returning({ id: tasks.id });
   return rows.length > 0;
 }

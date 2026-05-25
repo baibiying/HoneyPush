@@ -1,9 +1,12 @@
 "use client";
 
-import { Coins, Flame, Tv, CalendarDays, Archive } from "lucide-react";
+import { Coins, Flame, Tv, CalendarDays, Archive, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { request } from "@/lib/api/request";
+import { useAuth } from "@/components/auth/auth-provider";
+import { AUTH_CHANGED_EVENT, STATS_CHANGED_EVENT } from "@/lib/client-events";
 
 const NAV_ITEMS = [
   { href: "/",          icon: Tv,            label: "监督视窗" },
@@ -13,15 +16,59 @@ const NAV_ITEMS = [
 
 export function AppHeader() {
   const [coinCount, setCoinCount] = useState(0);
-  const [consecDays] = useState(0);
+  const [consecDays, setConsecDays] = useState(0);
   const pathname = usePathname();
+  const { user, openAuthModal, logout } = useAuth();
 
   useEffect(() => {
-    try {
-      const coins = parseInt(localStorage.getItem("focus-bureau-coins") ?? "0", 10);
-      setCoinCount(isNaN(coins) ? 0 : coins);
-    } catch { /* ignore */ }
-  }, []);
+    let cancelled = false;
+
+    const syncStats = async () => {
+      if (!user) {
+        Promise.resolve().then(() => {
+          if (cancelled) return;
+          setCoinCount(0);
+          setConsecDays(0);
+        });
+        return;
+      }
+
+      try {
+        const res = await request("/api/stats", { cache: "no-store" });
+        if (!res.ok) {
+          if (cancelled) return;
+          setCoinCount(0);
+          setConsecDays(0);
+          return;
+        }
+
+        const stats = await res.json();
+        if (cancelled) return;
+        setCoinCount(Number(stats?.totalCoins ?? 0));
+        setConsecDays(Number(stats?.consecutiveDays ?? 0));
+      } catch {
+        if (cancelled) return;
+        setCoinCount(0);
+        setConsecDays(0);
+      }
+    };
+
+    void syncStats();
+
+    const refresh = () => {
+      void syncStats();
+    };
+
+    window.addEventListener(STATS_CHANGED_EVENT, refresh);
+    window.addEventListener(AUTH_CHANGED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(STATS_CHANGED_EVENT, refresh);
+      window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+    };
+  }, [user]);
+
+  const displayName = user?.name || user?.email || "已登录";
 
   return (
     <header className="px-4 md:px-8 py-2 md:py-3 bg-[#FAF4D3] border-b-4 border-[#1C1917] fixed top-0 left-0 right-0 z-50">
@@ -36,13 +83,13 @@ export function AppHeader() {
             </div>
             <div className="min-w-0">
               <h1 className="text-base md:text-2xl font-bangers font-black tracking-wider text-[#1C1917] flex items-center gap-2 truncate">
-                FOCUS BUREAU
+                HONEYPUSH
                 <span className="bg-[#1C1917] text-[#FAF4D3] text-[9px] md:text-xs px-1.5 py-0.5 rounded font-comic font-normal hidden sm:inline whitespace-nowrap">
-                  专注监督局
+                  云端任务已上线
                 </span>
               </h1>
               <p className="text-[9px] md:text-xs font-semibold text-neutral-600 font-comic hidden md:block truncate">
-                结合 AI 动作识别与硬核游戏化惩戒的铁血效率终端
+                邮箱登录后自动保存任务、专注记录与统计数据
               </p>
             </div>
           </div>
@@ -57,6 +104,25 @@ export function AppHeader() {
               <Flame className="w-3 h-3" />
               <span className="bg-[#1C1917] text-rose-400 px-1 py-0.5 font-mono">{consecDays}</span>
             </div>
+            {user ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void logout();
+                }}
+                className="bg-stone-800 text-white px-2 py-1 comic-border comic-shadow-sm text-[10px] font-bold"
+              >
+                退出
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openAuthModal("login")}
+                className="bg-emerald-500 text-white px-2 py-1 comic-border comic-shadow-sm text-[10px] font-bold"
+              >
+                登录
+              </button>
+            )}
           </div>
         </div>
 
@@ -99,8 +165,44 @@ export function AppHeader() {
 
             <div className="bg-stone-800 text-white px-3 py-1.5 comic-border flex items-center gap-1.5 text-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="font-semibold">在线</span>
+              <span className="font-semibold">{user ? "账号在线" : "游客模式"}</span>
             </div>
+
+            {user ? (
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 comic-border comic-shadow-sm">
+                <div className="min-w-0">
+                  <p className="max-w-[180px] truncate text-xs font-bold text-[#1C1917]">{displayName}</p>
+                  <p className="text-[10px] text-neutral-500">任务自动云端保存</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void logout();
+                  }}
+                  className="flex items-center gap-1 border-2 border-black bg-rose-100 px-2 py-1 text-[11px] font-bold text-[#1C1917] hover:bg-rose-200"
+                >
+                  <LogOut className="w-3 h-3" />
+                  退出
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openAuthModal("login")}
+                  className="bg-[#1C1917] text-white px-3 py-1.5 comic-border comic-shadow-sm text-xs font-bold hover:bg-black"
+                >
+                  登录
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal("register")}
+                  className="bg-[#F15A24] text-white px-3 py-1.5 comic-border comic-shadow-sm text-xs font-bold hover:bg-[#d74d1f]"
+                >
+                  注册
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

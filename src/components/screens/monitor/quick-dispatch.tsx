@@ -5,18 +5,39 @@ import { Plus } from "lucide-react";
 import { request } from "@/lib/api/request";
 import { memory } from "@eazo/sdk";
 import { motion } from "framer-motion";
+import { TASKS_CHANGED_EVENT, emitClientEvent } from "@/lib/client-events";
+
+type Task = {
+  id: number;
+  text: string;
+  durationMinutes: number;
+  category: string;
+  checked: boolean;
+};
 
 interface QuickDispatchProps {
   topTaskText: string;
-  onTaskAdded: (text: string) => void;
+  canEdit: boolean;
+  onRequireLogin: () => void;
+  onTaskAdded: (task: Task) => void;
 }
 
-export function QuickDispatch({ topTaskText, onTaskAdded }: QuickDispatchProps) {
+export function QuickDispatch({
+  topTaskText,
+  canEdit,
+  onRequireLogin,
+  onTaskAdded,
+}: QuickDispatchProps) {
   const [inputValue, setInputValue] = useState("");
   const [adding, setAdding] = useState(false);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) {
+      onRequireLogin();
+      return;
+    }
+
     const text = inputValue.trim();
     if (!text) return;
 
@@ -27,14 +48,23 @@ export function QuickDispatch({ topTaskText, onTaskAdded }: QuickDispatchProps) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, category: "import-urgent" }),
       });
-      await res.json();
+      if (!res.ok) {
+        if (res.status === 401) {
+          onRequireLogin();
+          return;
+        }
+        throw new Error("ADD_TASK_FAILED");
+      }
+
+      const task = (await res.json()) as Task;
       memory.reportAction({
         content: `用户快速添加任务：${text}`,
         event_type: "create",
         page: "monitor",
         metadata: { type: "quick_add_task" },
       }).catch(() => {});
-      onTaskAdded(text);
+      emitClientEvent(TASKS_CHANGED_EVENT);
+      onTaskAdded(task);
       setInputValue("");
     } catch {
       alert("添加失败，请重试");
@@ -68,6 +98,9 @@ export function QuickDispatch({ topTaskText, onTaskAdded }: QuickDispatchProps) 
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
+          onFocus={() => {
+            if (!canEdit) onRequireLogin();
+          }}
           placeholder="输入任务名称，如「英语阅读15页」"
           className="w-full px-3 py-2 text-base border-2 border-black bg-white font-semibold placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
           disabled={adding}

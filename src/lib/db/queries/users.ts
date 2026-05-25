@@ -15,16 +15,25 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
 export async function upsertUser(data: {
   id: string;
   email?: string | null;
+  passwordHash?: string | null;
+  authProvider?: string | null;
+  emailVerifiedAt?: Date | null;
   name?: string | null;
   avatarUrl?: string | null;
 }): Promise<User> {
   const rows = await db
     .insert(users)
-    .values(data)
+    .values({
+      ...data,
+      authProvider: data.authProvider ?? "eazo",
+    })
     .onConflictDoUpdate({
       target: users.id,
       set: {
         email: data.email ?? null,
+        passwordHash: data.passwordHash ?? null,
+        authProvider: data.authProvider ?? "eazo",
+        emailVerifiedAt: data.emailVerifiedAt ?? null,
         name: data.name ?? null,
         avatarUrl: data.avatarUrl ?? null,
         updatedAt: new Date(),

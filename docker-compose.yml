@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: honeypush-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: honeypush
+    volumes:
+      - honeypush_pg_data:/var/lib/postgresql/data
+
+volumes:
+  honeypush_pg_data:
