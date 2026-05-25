@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { Calendar, Clock, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
+import { TaskHoverDetail } from "./task-hover-detail";
 import {
   MATRIX_GRID_ORDER,
   getQuadrantMeta,
@@ -56,16 +57,6 @@ function bubbleLabelClass(size: number, text: string) {
   return "text-[8px]";
 }
 
-function formatDateTimeParts(iso: string | null) {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return {
-    date: date.toLocaleDateString("zh-CN", { month: "long", day: "numeric" }),
-    time: date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }),
-  };
-}
-
 function isTaskScheduled(task: ScheduleTask) {
   return Boolean(task.scheduledStartAt && task.scheduledEndAt);
 }
@@ -114,58 +105,6 @@ function layoutTaskBubbles(tasks: ScheduleTask[], quadrantKey: QuadrantKey): Bub
       delay: seededUnit(task.id, 4) * 2.5,
     };
   });
-}
-
-type TaskHoverDetailProps = {
-  task: ScheduleTask;
-};
-
-function TaskHoverDetail({ task }: TaskHoverDetailProps) {
-  const deadline = formatDateTimeParts(task.deadline);
-
-  return (
-    <div
-      className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+8px)] z-50 w-[min(100vw-2rem,15rem)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 scale-95 group-hover:scale-100"
-      aria-hidden
-    >
-      <div className="rounded-2xl bg-white/98 backdrop-blur-md border border-neutral-200/90 shadow-[0_10px_28px_rgba(15,23,42,0.14)] overflow-hidden">
-        <div className="px-3 py-2 bg-neutral-50/90 border-b border-neutral-100">
-          <p className="text-xs font-bold text-neutral-800 leading-snug line-clamp-2">{task.text}</p>
-        </div>
-        <div className="px-3 py-2.5 grid grid-cols-2 gap-2.5">
-          <div className="flex gap-2 min-w-0">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-              <Clock className="h-3.5 w-3.5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-medium text-neutral-400 leading-none">预计用时</p>
-              <p className="mt-1 text-sm font-semibold text-neutral-800 tabular-nums">
-                {task.durationMinutes}
-                <span className="text-xs font-medium text-neutral-500 ml-0.5">分钟</span>
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2 min-w-0">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
-              <Calendar className="h-3.5 w-3.5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-medium text-neutral-400 leading-none">截止</p>
-              {deadline ? (
-                <>
-                  <p className="mt-1 text-xs font-semibold text-neutral-800 leading-tight">{deadline.date}</p>
-                  <p className="text-xs font-medium text-neutral-500 tabular-nums">{deadline.time}</p>
-                </>
-              ) : (
-                <p className="mt-1 text-xs font-medium text-neutral-400">未设置</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="mx-auto h-2 w-2 rotate-45 bg-white border-r border-b border-neutral-200/90 -mt-1 shadow-sm" />
-    </div>
-  );
 }
 
 type TaskBubbleProps = {

@@ -5,6 +5,7 @@ import {
   type AiScheduleItem,
 } from "@/lib/ai/fallback-schedule";
 import { parseAvailabilityFromBody } from "@/lib/ai/availability";
+import { rankTasksForSchedule } from "@/lib/ai/schedule-priority";
 import { assignScheduleTimes } from "@/lib/ai/schedule-times";
 import { requireUser } from "@/lib/auth/session";
 
@@ -20,9 +21,13 @@ const VALID_CATEGORIES = new Set([
   "notimport-noturgent",
 ]);
 
-const SYSTEM_PROMPT = `你是一个效率规划专家，擅长根据任务截止时间、预计用时和用户可用时间段，为用户已有的任务列表做排期。
-排期须遵循番茄钟：每段专注 25 分钟，段与段之间休息 5 分钟。durationMinutes 表示该任务预计需要完成多少分钟（用户填写的「预计用时」）。
-用户会提供 availability（今天及未来几天可用于做事的日期与时段）和 tasks。你必须只在 availability 内安排任务；今天排不下则排到明天或更晚的 availability 时段（由系统自动换算具体时间）。
+const SYSTEM_PROMPT = `你是一个效率规划专家，擅长根据任务截止时间、预计用时、四象限优先级和用户可用时间段，为用户已有的任务列表做排期。
+排期硬性规则（由系统自动落实，你只需给出顺序与时长）：
+1. 任务只能排在用户 availability 内；今天排不下则排到明天或更晚的可用时段。
+2. 每个任务按番茄钟拆分：专注 25 分钟 + 休息 5 分钟循环，直到完成预计专注时长；休息不占任务色块，但会消耗可用时段。
+3. 不同任务之间至少间隔 10 分钟（由系统自动留出）。
+4. durationMinutes 表示该任务预计需要的专注分钟数（用户填写的「预计用时」），不是连续占满一整段。
+用户会提供 availability（今天及未来几天可用于做事的日期与时段）和 tasks。
 用户会提供一组已经创建的任务（包含 id、text、durationMinutes、deadline、category 等），你需要：
 1. 为每个任务确认或调整四象限类别（category）：
    - import-urgent（A：重要且紧急）
@@ -30,7 +35,11 @@ const SYSTEM_PROMPT = `你是一个效率规划专家，擅长根据任务截止
    - notimport-urgent（C：紧急不重要）
    - notimport-noturgent（D：不重要不紧急）
 2. 为每个任务确认或调整合理的 durationMinutes（15-180，表示预计完成用时，默认 25）
-3. 给出建议执行顺序 order（从1开始，数字越小越优先；越接近 deadline 的任务通常应更靠前）
+3. 给出建议执行顺序 order（从1开始，数字越小越优先）。优先级须综合考虑：
+   - 第一优先：四象限 — Q1重要且紧急(import-urgent) > Q4紧急不重要(notimport-urgent) > Q2重要不紧急(import-noturgent) > Q3不重要不紧急(notimport-noturgent)
+   - 第二优先：同一象限内 deadline 越早越靠前
+   - 第三优先：预计用时更紧、更关键的任务可适当提前
+   （系统会按上述规则再次排序后落日历，请与 category 一致地给出 order）
 4. 必须保留用户提供的每个 id，不要新增或删除任务
 5. 返回 JSON：{"schedule":[{"id":1,"category":"import-urgent","durationMinutes":25,"order":1}]}
 只返回 JSON，不要其他说明文字。具体开始/结束时间由系统根据 availability 与番茄钟规则自动生成。`;
@@ -115,16 +124,17 @@ function normalizeSchedule(
     };
   });
 
-  return assignScheduleTimes(
+  const ranked = rankTasksForSchedule(
     merged.map(({ id, category, durationMinutes, order }) => ({
       id,
       category,
       durationMinutes,
       order,
     })),
-    deadlinesById,
-    availability
+    deadlinesById
   );
+
+  return assignScheduleTimes(ranked, deadlinesById, availability);
 }
 
 export async function POST(req: NextRequest) {
@@ -179,6 +189,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const buildResponse = (schedule: AiScheduleItem[], unscheduledIds: number[], source: string) => {
+    const unscheduledTasks = sourceTasks
+      .filter((task) => unscheduledIds.includes(task.id))
+      .map((task) => ({ id: task.id, text: task.text }));
+    return NextResponse.json({ schedule, unscheduledIds, unscheduledTasks, source });
+  };
+
   const runSchedule = (parsed: unknown) => {
     const { schedule, unscheduledIds } = normalizeSchedule(parsed, sourceTasks, availability);
     return { schedule, unscheduledIds };
@@ -186,7 +203,7 @@ export async function POST(req: NextRequest) {
 
   if (!privateKey) {
     const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(sourceTasks, availability);
-    return NextResponse.json({ schedule, unscheduledIds, source: "fallback" });
+    return buildResponse(schedule, unscheduledIds, "fallback");
   }
 
   const userPayload = JSON.stringify(
@@ -209,10 +226,10 @@ export async function POST(req: NextRequest) {
     const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { schedule: [] };
     const { schedule, unscheduledIds } = runSchedule(parsed);
 
-    return NextResponse.json({ schedule, unscheduledIds, source: "ai" });
+    return buildResponse(schedule, unscheduledIds, "ai");
   } catch (err) {
     console.error("AI schedule error:", err);
     const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(sourceTasks, availability);
-    return NextResponse.json({ schedule, unscheduledIds, source: "fallback" });
+    return buildResponse(schedule, unscheduledIds, "fallback");
   }
 }

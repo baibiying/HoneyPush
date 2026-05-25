@@ -11,6 +11,7 @@ import { QuadrantTaskBoard } from "./quadrant-task-board";
 import { ScheduleCalendar } from "./schedule-calendar";
 import { ScheduleGameHub, type ScheduleScene } from "./schedule-game-hub";
 import { SchedulePromptOverlay } from "./schedule-prompt-overlay";
+import { ScheduleUnscheduledNotice } from "./schedule-unscheduled-notice";
 import {
   AvailabilityEditor,
   toAvailabilityRows,
@@ -111,6 +112,10 @@ export function ScheduleScreen() {
   const [scene, setScene] = useState<ScheduleScene>("map");
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [schedulePromptOpen, setSchedulePromptOpen] = useState(false);
+  const [unscheduledNotice, setUnscheduledNotice] = useState<{
+    scheduledCount: number;
+    taskNames: string[];
+  } | null>(null);
   const prevSceneRef = useRef<ScheduleScene>("map");
 
   const canEdit = Boolean(user);
@@ -452,6 +457,7 @@ export function ScheduleScreen() {
             scheduledEndAt: string;
           }>;
           unscheduledIds?: number[];
+          unscheduledTasks?: Array<{ id: number; text: string }>;
           source?: string;
         };
 
@@ -480,10 +486,18 @@ export function ScheduleScreen() {
 
         const unscheduled = Array.isArray(data.unscheduledIds) ? data.unscheduledIds : [];
         if (unscheduled.length > 0) {
-          const message = isAuto
-            ? `时段已更新：${plan.length} 条已重新排期，另有 ${unscheduled.length} 条在可用时段内排不下。`
-            : `已排期 ${plan.length} 条任务。另有 ${unscheduled.length} 条在可用时段内排不下，请增加明天或之后的时间段后重试。`;
-          alert(message);
+          const namesFromApi = Array.isArray(data.unscheduledTasks)
+            ? data.unscheduledTasks.map((item) => item.text).filter(Boolean)
+            : [];
+          const names =
+            namesFromApi.length > 0
+              ? namesFromApi
+              : unscheduled
+                  .map((id) => pendingTasks.find((task) => task.id === id)?.text)
+                  .filter((text): text is string => Boolean(text));
+          setUnscheduledNotice({ scheduledCount: plan.length, taskNames: names });
+        } else {
+          setUnscheduledNotice(null);
         }
 
       playChime();
@@ -635,20 +649,30 @@ export function ScheduleScreen() {
             variant="game"
           />
         }
-        scheduleCalendarHidden={schedulePromptOpen}
+        scheduleCalendarHidden={schedulePromptOpen || Boolean(unscheduledNotice)}
         scheduleOverlay={
-          scheduleRefreshHint ? (
-            <SchedulePromptOverlay
-              open={schedulePromptOpen}
-              reasons={scheduleRefreshHint.reasons}
-              isReschedule={scheduleRefreshHint.isReschedule}
-              loading={aiLoading}
-              buttonDisabled={scheduleButtonDisabled}
-              buttonLabel={scheduleButtonLabel}
-              onSchedule={() => void handleAiSchedule({ auto: false })}
-              onViewCalendar={() => setSchedulePromptOpen(false)}
-            />
-          ) : null
+          <>
+            {scheduleRefreshHint ? (
+              <SchedulePromptOverlay
+                open={schedulePromptOpen}
+                reasons={scheduleRefreshHint.reasons}
+                isReschedule={scheduleRefreshHint.isReschedule}
+                loading={aiLoading}
+                buttonDisabled={scheduleButtonDisabled}
+                buttonLabel={scheduleButtonLabel}
+                onSchedule={() => void handleAiSchedule({ auto: false })}
+                onViewCalendar={() => setSchedulePromptOpen(false)}
+              />
+            ) : null}
+            {unscheduledNotice ? (
+              <ScheduleUnscheduledNotice
+                open
+                scheduledCount={unscheduledNotice.scheduledCount}
+                taskNames={unscheduledNotice.taskNames}
+                onDismiss={() => setUnscheduledNotice(null)}
+              />
+            ) : null}
+          </>
         }
         schedulePanel={
           <ScheduleCalendar key={calendarRefreshKey} tasks={tasks} embedded />

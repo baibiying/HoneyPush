@@ -1,4 +1,5 @@
 import type { AvailabilitySlotInput } from "./availability";
+import { normalizeQuadrantCategory, rankTasksForSchedule } from "./schedule-priority";
 import { assignScheduleTimes, type TimedScheduleItem } from "./schedule-times";
 
 export type AiScheduleTask = {
@@ -33,14 +34,6 @@ function guessCategory(text: string, index: number) {
   return CATEGORY_CYCLE[index % CATEGORY_CYCLE.length];
 }
 
-function urgencyFromDeadline(deadline: Date | null | undefined, now = new Date()) {
-  if (!deadline) return 2;
-  const hoursLeft = (deadline.getTime() - now.getTime()) / (60 * 60 * 1000);
-  if (hoursLeft <= 24) return 0;
-  if (hoursLeft <= 72) return 1;
-  return 2;
-}
-
 export type AiScheduleItem = TimedScheduleItem;
 
 export function buildFallbackScheduleFromTasks(
@@ -54,35 +47,26 @@ export function buildFallbackScheduleFromTasks(
   availability: AvailabilitySlotInput[]
 ) {
   const deadlinesById = new Map<number, Date | null>();
-  const ranked = tasks
-    .map((task, index) => {
-      const deadline = task.deadline ? new Date(task.deadline) : null;
-      deadlinesById.set(
-        task.id,
-        deadline && !Number.isNaN(deadline.getTime()) ? deadline : null
-      );
-      return {
-        task,
-        index,
-        urgency: urgencyFromDeadline(deadline),
-      };
-    })
-    .sort((a, b) => {
-      if (a.urgency !== b.urgency) return a.urgency - b.urgency;
-      const deadlineA = deadlinesById.get(a.task.id)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      const deadlineB = deadlinesById.get(b.task.id)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      if (deadlineA !== deadlineB) return deadlineA - deadlineB;
-      return a.index - b.index;
-    });
 
-  const base = ranked.map(({ task, index }, orderIndex) => ({
-    id: task.id,
-    category: task.category ?? guessCategory(task.text, index),
-    durationMinutes: task.durationMinutes ?? guessDurationMinutes(task.text),
-    order: orderIndex + 1,
-  }));
+  const base = tasks.map((task, index) => {
+    const deadline = task.deadline ? new Date(task.deadline) : null;
+    deadlinesById.set(
+      task.id,
+      deadline && !Number.isNaN(deadline.getTime()) ? deadline : null
+    );
+    const category = normalizeQuadrantCategory(
+      task.category ?? guessCategory(task.text, index)
+    );
+    return {
+      id: task.id,
+      category,
+      durationMinutes: task.durationMinutes ?? guessDurationMinutes(task.text),
+      order: index + 1,
+    };
+  });
 
-  return assignScheduleTimes(base, deadlinesById, availability);
+  const ranked = rankTasksForSchedule(base, deadlinesById);
+  return assignScheduleTimes(ranked, deadlinesById, availability);
 }
 
 export function buildFallbackSchedule(input: string): { tasks: AiScheduleTask[] } {

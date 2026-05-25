@@ -1,18 +1,29 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
 import { FROSTED_FIELD } from "./task-form-shared";
-import { getQuadrantMeta, normalizeQuadrantKey } from "./quadrants";
+import { expandScheduledTaskToFocusSegments } from "@/lib/ai/schedule-times";
+import {
+  buildCalendarTaskColorMap,
+  getCalendarTaskPalette,
+  type CalendarTaskPalette,
+} from "./calendar-task-colors";
+import { TaskHoverDetailCard } from "./task-hover-detail";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_START = 7;
 const HOUR_END = 22;
-const PX_PER_HOUR = 44;
+/** 每小时行高（越大时间区域越易辨认，1 分钟 ≈ 1.47px） */
+const PX_PER_HOUR = 88;
 const GRID_HEIGHT = (HOUR_END - HOUR_START) * PX_PER_HOUR;
-const TIME_COLUMN_WIDTH = 40;
-const DAY_COLUMN_WIDTH = 116;
+/** 左侧时间轴列宽 */
+const TIME_COLUMN_WIDTH = 88;
+const DAY_COLUMN_WIDTH = 192;
+/** 相邻任务块底部留白，避免视觉叠在一起 */
+const BLOCK_VISUAL_GAP_PX = 3;
 /** 默认向前展示的天数（可左右滑动查看更多） */
 const DEFAULT_FUTURE_DAYS = 30;
 const EXTRA_DAYS_AFTER_LAST = 4;
@@ -52,17 +63,14 @@ function formatHourLabel(hour: number) {
   return `${String(hour).padStart(2, "0")}:00`;
 }
 
-function formatDeadline(value: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString("zh-CN", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+function formatBlockTimeRange(startAt: string, endAt: string) {
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  return `${fmt(startAt)} – ${fmt(endAt)}`;
 }
 
 function getDayStartAnchor(dayDate: Date) {
@@ -78,12 +86,15 @@ function dateToGridTop(date: Date, dayDate: Date) {
   return (clamped / 60) * PX_PER_HOUR;
 }
 
-function getTaskBlockLayout(task: ScheduleTask, dayDate: Date) {
-  const start = new Date(task.scheduledStartAt!);
-  const end = new Date(task.scheduledEndAt!);
+type FocusBlockLayout = { top: number; height: number };
+
+function getFocusBlockLayout(startAt: string, endAt: string, dayDate: Date): FocusBlockLayout {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
   const top = dateToGridTop(start, dayDate);
   const bottom = dateToGridTop(end, dayDate);
-  const height = Math.max(28, bottom - top);
+  const rawHeight = bottom - top;
+  const height = Math.max(8, rawHeight - BLOCK_VISUAL_GAP_PX);
   const maxTop = GRID_HEIGHT - height;
   return {
     top: Math.min(top, maxTop),
@@ -91,15 +102,157 @@ function getTaskBlockLayout(task: ScheduleTask, dayDate: Date) {
   };
 }
 
-function getTaskBlockClasses(category: string) {
-  const meta = getQuadrantMeta(normalizeQuadrantKey(category));
+type LaidOutBlock = {
+  block: CalendarDisplayBlock;
+  layout: FocusBlockLayout;
+  lane: number;
+  laneCount: number;
+};
+
+/** 时间重叠的块分列展示，避免挤在同一条竖线上 */
+function assignBlockLanes(blocks: CalendarDisplayBlock[], dayDate: Date): LaidOutBlock[] {
+  const entries = blocks
+    .map((block) => ({
+      block,
+      layout: getFocusBlockLayout(block.startAt, block.endAt, dayDate),
+      lane: 0,
+    }))
+    .sort(
+      (a, b) =>
+        a.layout.top - b.layout.top ||
+        new Date(a.block.startAt).getTime() - new Date(b.block.startAt).getTime()
+    );
+
+  const laneEnds: number[] = [];
+
+  for (const entry of entries) {
+    let lane = 0;
+    while (lane < laneEnds.length && entry.layout.top < laneEnds[lane] - 1) {
+      lane += 1;
+    }
+    if (lane === laneEnds.length) laneEnds.push(0);
+    entry.lane = lane;
+    laneEnds[lane] = entry.layout.top + entry.layout.height;
+  }
+
+  const laneCount = Math.max(1, laneEnds.length);
+  return entries.map((entry) => ({ ...entry, laneCount }));
+}
+
+function blockLaneStyle(lane: number, laneCount: number) {
+  const gapPx = 6;
+  const widthPercent = 100 / laneCount;
+  return {
+    left: `calc(${lane * widthPercent}% + ${gapPx / 2}px)`,
+    width: `calc(${widthPercent}% - ${gapPx}px)`,
+  };
+}
+
+type CalendarDisplayBlock = {
+  task: ScheduleTask;
+  startAt: string;
+  endAt: string;
+  blockKey: string;
+};
+
+function getTaskBlockClasses(palette: CalendarTaskPalette) {
   return [
-    "absolute left-1 right-1 z-10 overflow-hidden rounded-lg border-2",
-    meta.panelBorder.replace("border-[3px]", "border-2"),
-    meta.panelBg,
-    meta.panelShadow,
+    "absolute overflow-hidden rounded-lg border-2 cursor-default box-border",
+    palette.border,
+    palette.bg,
+    "shadow-[0_2px_0_rgba(28,25,23,0.85)]",
     "px-1.5 py-1 text-white",
   ].join(" ");
+}
+
+function getTaskBlockStyle(palette: CalendarTaskPalette) {
+  if (!palette.style) return undefined;
+  return {
+    background: palette.style.background,
+    borderColor: palette.style.borderColor,
+  } as const;
+}
+
+type CalendarTaskBlockProps = {
+  block: CalendarDisplayBlock;
+  layout: FocusBlockLayout;
+  lane: number;
+  laneCount: number;
+  stackIndex: number;
+  colorMap: Map<number, CalendarTaskPalette>;
+};
+
+function CalendarTaskBlock({
+  block,
+  layout,
+  lane,
+  laneCount,
+  stackIndex,
+  colorMap,
+}: CalendarTaskBlockProps) {
+  const { task, startAt, endAt } = block;
+  const blockRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+
+  const { top, height } = layout;
+  const palette = getCalendarTaskPalette(task.id, colorMap);
+  const timeRange = formatBlockTimeRange(startAt, endAt);
+  const titleLineClamp =
+    height >= 64 ? "line-clamp-3 text-[10px]" : height >= 44 ? "line-clamp-2 text-[9px]" : "truncate text-[9px]";
+
+  const openTooltip = () => {
+    const rect = blockRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setHovered(true);
+  };
+
+  const tooltip =
+    hovered && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="pointer-events-none fixed z-[200] w-[min(100vw-2rem,16rem)] -translate-x-1/2 -translate-y-full"
+            style={{ left: tooltipPos.x, top: tooltipPos.y - 8 }}
+            role="tooltip"
+          >
+            <TaskHoverDetailCard task={task} segmentStartAt={startAt} segmentEndAt={endAt} />
+            <div className="mx-auto h-2 w-2 rotate-45 bg-white border-r border-b border-neutral-200/90 -mt-1 shadow-sm" />
+          </div>,
+          document.body
+        )
+      : null;
+
+  return (
+    <>
+      <div
+        ref={blockRef}
+        className={getTaskBlockClasses(palette)}
+        style={{
+          top,
+          height,
+          zIndex: 10 + stackIndex,
+          ...blockLaneStyle(lane, laneCount),
+          ...getTaskBlockStyle(palette),
+        }}
+        onMouseEnter={openTooltip}
+        onMouseLeave={() => setHovered(false)}
+        aria-label={`${task.text}，${timeRange}`}
+      >
+        <div className="flex h-full min-h-0 items-center">
+          <p
+            className={[
+              "w-full font-black leading-snug drop-shadow-[0_1px_0_#1C1917]",
+              titleLineClamp,
+            ].join(" ")}
+          >
+            {task.text}
+          </p>
+        </div>
+      </div>
+      {tooltip}
+    </>
+  );
 }
 
 type ScheduleCalendarProps = {
@@ -118,6 +271,11 @@ export function ScheduleCalendar({ tasks, embedded = false }: ScheduleCalendarPr
             new Date(a.scheduledStartAt!).getTime() - new Date(b.scheduledStartAt!).getTime()
         ),
     [tasks]
+  );
+
+  const taskColorMap = useMemo(
+    () => buildCalendarTaskColorMap(scheduledTasks.map((task) => task.id)),
+    [scheduledTasks]
   );
 
   const dayBuckets = useMemo(() => {
@@ -148,16 +306,33 @@ export function ScheduleCalendar({ tasks, embedded = false }: ScheduleCalendarPr
 
     const days = Array.from({ length: dayCount }, (_, index) => {
       const date = new Date(today.getTime() + index * DAY_MS);
-      return { date, key: formatDateKey(date), tasks: [] as ScheduleTask[] };
+      return {
+        date,
+        key: formatDateKey(date),
+        blocks: [] as CalendarDisplayBlock[],
+        laidOut: [] as LaidOutBlock[],
+      };
     });
 
     const bucketMap = new Map(days.map((day) => [day.key, day]));
 
     for (const task of scheduledTasks) {
-      const start = new Date(task.scheduledStartAt!);
-      const key = formatDateKey(startOfDay(start));
-      const bucket = bucketMap.get(key);
-      if (bucket) bucket.tasks.push(task);
+      for (const segment of expandScheduledTaskToFocusSegments(task)) {
+        const start = new Date(segment.startAt);
+        const key = formatDateKey(startOfDay(start));
+        const bucket = bucketMap.get(key);
+        if (!bucket) continue;
+        bucket.blocks.push({
+          task,
+          startAt: segment.startAt,
+          endAt: segment.endAt,
+          blockKey: `${task.id}-${segment.segmentIndex}`,
+        });
+      }
+    }
+
+    for (const day of days) {
+      day.laidOut = assignBlockLanes(day.blocks, day.date);
     }
 
     return days;
@@ -191,7 +366,7 @@ export function ScheduleCalendar({ tasks, embedded = false }: ScheduleCalendarPr
       <div
         className={[
           "overflow-x-auto overflow-y-auto overscroll-x-contain rounded-xl border-2 border-[#1C1917]/50 bg-black/30",
-          embedded ? "flex flex-col flex-1 min-h-0 h-full w-full" : "max-h-[560px]",
+          embedded ? "flex flex-col flex-1 min-h-0 h-full w-full" : "max-h-[min(720px,70vh)]",
         ].join(" ")}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
@@ -201,10 +376,10 @@ export function ScheduleCalendar({ tasks, embedded = false }: ScheduleCalendarPr
         >
           <div className="flex shrink-0 border-b-2 border-[#1C1917]/60 sticky top-0 z-20">
             <div
-              className="sticky left-0 z-30 shrink-0 border-r border-white/15 bg-gradient-to-br from-violet-800 to-purple-900 flex items-end justify-center pb-1.5"
+              className="sticky left-0 z-30 shrink-0 border-r border-white/15 bg-gradient-to-br from-violet-800 to-purple-900 flex items-end justify-center pb-2 px-1"
               style={{ width: TIME_COLUMN_WIDTH }}
             >
-              <span className="text-[8px] font-bold text-amber-200/80">时间</span>
+              <span className="text-[10px] sm:text-xs font-bold text-amber-100/90">时间</span>
             </div>
             <div className="flex bg-gradient-to-r from-violet-700/95 via-fuchsia-700/95 to-purple-800/95 backdrop-blur-sm">
               {dayBuckets.map((day) => (
@@ -226,16 +401,30 @@ export function ScheduleCalendar({ tasks, embedded = false }: ScheduleCalendarPr
             style={embedded ? { minHeight: GRID_HEIGHT } : undefined}
           >
             <div
-              className="sticky left-0 z-10 shrink-0 relative border-r border-white/15 bg-black/50"
+              className="sticky left-0 z-10 shrink-0 relative border-r-2 border-white/20 bg-gradient-to-b from-black/60 to-black/45"
               style={timeColumnStyle}
             >
               {HOUR_LABELS.map((hour, index) => (
                 <div
-                  key={hour}
-                  className="absolute right-0.5 text-[8px] font-bold text-amber-100/65 tabular-nums -translate-y-1/2"
-                  style={{ top: index * PX_PER_HOUR }}
+                  key={`hour-band-${hour}`}
+                  className="absolute left-0 right-0 border-t border-white/10 pointer-events-none"
+                  style={{ top: index * PX_PER_HOUR, height: PX_PER_HOUR }}
                 >
-                  {formatHourLabel(hour)}
+                  <div
+                    className="absolute inset-x-0 top-0 border-t border-dashed border-amber-200/25 pointer-events-none"
+                    style={{ top: PX_PER_HOUR / 2 }}
+                  />
+                </div>
+              ))}
+              {HOUR_LABELS.map((hour, index) => (
+                <div
+                  key={hour}
+                  className="absolute left-0 right-0 flex items-start justify-end pr-2 pt-0.5 pointer-events-none"
+                  style={{ top: index * PX_PER_HOUR, height: PX_PER_HOUR }}
+                >
+                  <span className="text-[11px] sm:text-xs font-bold text-amber-50 tabular-nums leading-none drop-shadow-[0_1px_0_rgba(0,0,0,0.8)]">
+                    {formatHourLabel(hour)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -250,63 +439,29 @@ export function ScheduleCalendar({ tasks, embedded = false }: ScheduleCalendarPr
               {HOUR_LABELS.map((hour, index) => (
                 <div
                   key={hour}
-                  className="absolute left-0 right-0 border-t border-dashed border-white/12 pointer-events-none"
-                  style={{ top: index * PX_PER_HOUR }}
-                />
+                  className="absolute left-0 right-0 pointer-events-none"
+                  style={{ top: index * PX_PER_HOUR, height: PX_PER_HOUR }}
+                >
+                  <div className="absolute inset-x-0 top-0 border-t border-white/18" />
+                  <div
+                    className="absolute inset-x-0 border-t border-dashed border-white/10"
+                    style={{ top: PX_PER_HOUR / 2 }}
+                  />
+                </div>
               ))}
               <div className="absolute left-0 right-0 top-0 bottom-0 border-b-2 border-[#1C1917]/40 pointer-events-none" />
 
-              {day.tasks.map((task, index) => {
-                const { top, height } = getTaskBlockLayout(task, day.date);
-                const deadlineLabel = formatDeadline(task.deadline);
-                const showDetail = height >= 40;
-                const meta = getQuadrantMeta(normalizeQuadrantKey(task.category));
-
-                return (
-                  <div
-                    key={task.id}
-                    className={getTaskBlockClasses(task.category)}
-                    style={{ top, height, zIndex: 10 + index }}
-                    title={task.text}
-                  >
-                    {showDetail ? (
-                      <>
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <span className="rounded px-1 py-px text-[8px] font-black bg-black/25 border border-white/30">
-                            {meta.shortTag}
-                          </span>
-                          <p className="text-[8px] font-bold text-white/95 leading-none truncate flex-1 drop-shadow-[0_1px_0_#1C1917]">
-                            {new Date(task.scheduledStartAt!).toLocaleTimeString("zh-CN", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: false,
-                            })}
-                            –
-                            {new Date(task.scheduledEndAt!).toLocaleTimeString("zh-CN", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: false,
-                            })}
-                          </p>
-                        </div>
-                        <p className="text-[10px] font-black leading-snug line-clamp-2 drop-shadow-[0_1px_0_#1C1917]">
-                          {task.text}
-                        </p>
-                        {height >= 56 && (
-                          <p className="text-[8px] text-white/85 font-semibold truncate mt-0.5">
-                            {task.durationMinutes} 分钟
-                            {deadlineLabel ? ` · 截止 ${deadlineLabel}` : ""}
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-[9px] font-black truncate leading-tight drop-shadow-[0_1px_0_#1C1917]">
-                        {task.text}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
+              {day.laidOut.map((entry, index) => (
+                <CalendarTaskBlock
+                  key={entry.block.blockKey}
+                  block={entry.block}
+                  layout={entry.layout}
+                  lane={entry.lane}
+                  laneCount={entry.laneCount}
+                  stackIndex={index}
+                  colorMap={taskColorMap}
+                />
+              ))}
                 </div>
               ))}
             </div>
