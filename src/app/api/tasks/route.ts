@@ -21,8 +21,16 @@ export async function GET(req: NextRequest) {
   if (!result.ok) return result.response;
   const { id: userId } = result.user;
 
-  const items = await getTasks(userId);
-  return NextResponse.json(items);
+  try {
+    const items = await getTasks(userId);
+    return NextResponse.json(items);
+  } catch (err) {
+    console.error("[GET /api/tasks]", err);
+    return NextResponse.json(
+      { error: "任务列表加载失败，请确认已执行数据库迁移（npm run db:migrate）" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {

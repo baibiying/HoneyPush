@@ -31,6 +31,7 @@ export async function PATCH(
     deadline?: Date | null;
     scheduledStartAt?: Date | null;
     scheduledEndAt?: Date | null;
+    scheduledFocusSegments?: Array<{ startAt: string; endAt: string }> | null;
   } = {};
 
   if (typeof body.text === "string") {
@@ -61,6 +62,30 @@ export async function PATCH(
     return NextResponse.json({ error: "scheduledEndAt is invalid" }, { status: 400 });
   }
   if (scheduledEndAt !== undefined) payload.scheduledEndAt = scheduledEndAt;
+
+  if (body.scheduledFocusSegments !== undefined) {
+    if (body.scheduledFocusSegments === null) {
+      payload.scheduledFocusSegments = null;
+    } else if (Array.isArray(body.scheduledFocusSegments)) {
+      const segments: Array<{ startAt: string; endAt: string }> = [];
+      for (const item of body.scheduledFocusSegments) {
+        if (!item || typeof item !== "object") continue;
+        const row = item as { startAt?: unknown; endAt?: unknown };
+        const startAt = String(row.startAt ?? "");
+        const endAt = String(row.endAt ?? "");
+        if (!startAt || !endAt) continue;
+        if (Number.isNaN(new Date(startAt).getTime())) continue;
+        if (Number.isNaN(new Date(endAt).getTime())) continue;
+        segments.push({ startAt, endAt });
+      }
+      payload.scheduledFocusSegments = segments.length > 0 ? segments : null;
+    } else {
+      return NextResponse.json(
+        { error: "scheduledFocusSegments must be an array or null" },
+        { status: 400 }
+      );
+    }
+  }
 
   const updated = await updateTask(id, userId, payload);
   if (!updated) return NextResponse.json({ error: "Task not found" }, { status: 404 });

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { CalendarDays } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
 import { FROSTED_FIELD } from "./task-form-shared";
@@ -11,11 +10,16 @@ import {
   getCalendarTaskPalette,
   type CalendarTaskPalette,
 } from "./calendar-task-colors";
-import { TaskHoverDetailCard } from "./task-hover-detail";
+import {
+  TaskHoverTooltipPortal,
+  getTaskTooltipPosition,
+  type TaskTooltipPosition,
+} from "./task-hover-detail";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const HOUR_START = 7;
-const HOUR_END = 22;
+/** 每天完整 24 小时（0:00–24:00），与可用时段一致 */
+const HOUR_START = 0;
+const HOUR_END = 24;
 /** 每小时行高（越大时间区域越易辨认，1 分钟 ≈ 1.47px） */
 const PX_PER_HOUR = 88;
 const GRID_HEIGHT = (HOUR_END - HOUR_START) * PX_PER_HOUR;
@@ -193,7 +197,7 @@ function CalendarTaskBlock({
   const { task, startAt, endAt } = block;
   const blockRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [tooltipPos, setTooltipPos] = useState<TaskTooltipPosition | null>(null);
 
   const { top, height } = layout;
   const palette = getCalendarTaskPalette(task.id, colorMap);
@@ -204,24 +208,9 @@ function CalendarTaskBlock({
   const openTooltip = () => {
     const rect = blockRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+    setTooltipPos(getTaskTooltipPosition(rect));
     setHovered(true);
   };
-
-  const tooltip =
-    hovered && typeof document !== "undefined"
-      ? createPortal(
-          <div
-            className="pointer-events-none fixed z-[200] w-[min(100vw-2rem,16rem)] -translate-x-1/2 -translate-y-full"
-            style={{ left: tooltipPos.x, top: tooltipPos.y - 8 }}
-            role="tooltip"
-          >
-            <TaskHoverDetailCard task={task} segmentStartAt={startAt} segmentEndAt={endAt} />
-            <div className="mx-auto h-2 w-2 rotate-45 bg-white border-r border-b border-neutral-200/90 -mt-1 shadow-sm" />
-          </div>,
-          document.body
-        )
-      : null;
 
   return (
     <>
@@ -250,7 +239,13 @@ function CalendarTaskBlock({
           </p>
         </div>
       </div>
-      {tooltip}
+      <TaskHoverTooltipPortal
+        task={task}
+        open={hovered}
+        position={tooltipPos}
+        segmentStartAt={startAt}
+        segmentEndAt={endAt}
+      />
     </>
   );
 }
@@ -261,7 +256,10 @@ type ScheduleCalendarProps = {
   embedded?: boolean;
 };
 
-export function ScheduleCalendar({ tasks, embedded = false }: ScheduleCalendarProps) {
+export function ScheduleCalendar({
+  tasks,
+  embedded = false,
+}: ScheduleCalendarProps) {
   const scheduledTasks = useMemo(
     () =>
       tasks

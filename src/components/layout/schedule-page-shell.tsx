@@ -1,6 +1,9 @@
-import { ScheduleMainReset } from "./schedule-main-reset";
+"use client";
 
-export default function ScheduleLayout({ children }: { children: React.ReactNode }) {
+import { ScheduleMainReset } from "@/components/layout/schedule-main-reset";
+
+/** 排期首页全屏紫色背景容器 */
+export function SchedulePageShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <ScheduleMainReset />

@@ -1,9 +1,52 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, Clock, LayoutGrid } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
 import { planPomodoroSegments } from "@/lib/ai/schedule-times";
 import { getQuadrantMeta, normalizeQuadrantKey } from "./quadrants";
+
+const TOOLTIP_MAX_WIDTH_PX = 256;
+const TOOLTIP_ESTIMATE_HEIGHT_PX = 260;
+const TOOLTIP_GAP_PX = 10;
+const VIEWPORT_PAD_PX = 12;
+
+export type TaskTooltipPlacement = "above" | "below";
+
+export type TaskTooltipPosition = {
+  x: number;
+  y: number;
+  placement: TaskTooltipPlacement;
+};
+
+export function getTaskTooltipPosition(rect: DOMRect): TaskTooltipPosition {
+  const maxWidth = Math.min(window.innerWidth - 32, TOOLTIP_MAX_WIDTH_PX);
+  const halfW = maxWidth / 2;
+  const centerX = rect.left + rect.width / 2;
+  const x = Math.max(
+    halfW + VIEWPORT_PAD_PX,
+    Math.min(window.innerWidth - halfW - VIEWPORT_PAD_PX, centerX)
+  );
+
+  const spaceAbove = rect.top;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const fitsAbove = spaceAbove >= TOOLTIP_ESTIMATE_HEIGHT_PX + TOOLTIP_GAP_PX;
+  const fitsBelow = spaceBelow >= TOOLTIP_ESTIMATE_HEIGHT_PX + TOOLTIP_GAP_PX;
+
+  let placement: TaskTooltipPlacement = "above";
+  if (!fitsAbove && fitsBelow) placement = "below";
+  else if (!fitsAbove && !fitsBelow) {
+    placement = spaceBelow > spaceAbove ? "below" : "above";
+  } else if (fitsAbove && fitsBelow) {
+    placement = spaceAbove >= spaceBelow ? "above" : "below";
+  }
+
+  const y =
+    placement === "above" ? rect.top - TOOLTIP_GAP_PX : rect.bottom + TOOLTIP_GAP_PX;
+
+  return { x, y, placement };
+}
 
 export function formatDateTimeParts(iso: string | null) {
   if (!iso) return null;
@@ -112,19 +155,53 @@ export function TaskHoverDetailCard({
   );
 }
 
-type TaskHoverDetailProps = {
+type TaskHoverTooltipPortalProps = {
   task: ScheduleTask;
+  open: boolean;
+  position: TaskTooltipPosition | null;
+  segmentStartAt?: string;
+  segmentEndAt?: string;
 };
 
-/** 四象限气泡用：相对定位在触发元素上方 */
-export function TaskHoverDetail({ task }: TaskHoverDetailProps) {
-  return (
+/** 挂到 document.body，避免被 overflow 裁切；根据视口自动显示在上方或下方 */
+export function TaskHoverTooltipPortal({
+  task,
+  open,
+  position,
+  segmentStartAt,
+  segmentEndAt,
+}: TaskHoverTooltipPortalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!open || !position || !mounted || typeof document === "undefined") return null;
+
+  const transform =
+    position.placement === "above"
+      ? "translate(-50%, -100%)"
+      : "translate(-50%, 0)";
+
+  return createPortal(
     <div
-      className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+8px)] z-50 w-[min(100vw-2rem,16rem)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 scale-95 group-hover:scale-100"
-      aria-hidden
+      className="pointer-events-none fixed z-[200] w-[min(100vw-2rem,16rem)]"
+      style={{ left: position.x, top: position.y, transform }}
+      role="tooltip"
     >
-      <TaskHoverDetailCard task={task} />
-      <div className="mx-auto h-2 w-2 rotate-45 bg-white border-r border-b border-neutral-200/90 -mt-1 shadow-sm" />
-    </div>
+      {position.placement === "below" ? (
+        <div className="mx-auto mb-1 h-2 w-2 rotate-45 bg-white border-l border-t border-neutral-200/90 shadow-sm" />
+      ) : null}
+      <TaskHoverDetailCard
+        task={task}
+        segmentStartAt={segmentStartAt}
+        segmentEndAt={segmentEndAt}
+      />
+      {position.placement === "above" ? (
+        <div className="mx-auto h-2 w-2 rotate-45 bg-white border-r border-b border-neutral-200/90 -mt-1 shadow-sm" />
+      ) : null}
+    </div>,
+    document.body
   );
 }

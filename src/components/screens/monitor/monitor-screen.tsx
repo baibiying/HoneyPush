@@ -1,9 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { OFFICERS } from "@/lib/officers-data";
+import {
+  EXECUTE_TASK_QUERY,
+  clearStashedExecuteTask,
+  readStashedExecuteTaskId,
+} from "@/lib/execute-task-flow";
 import { OfficerSelector } from "./officer-selector";
-import { CrtMonitor } from "./crt-monitor";
+import { CrtMonitor, type CrtMonitorHandle } from "./crt-monitor";
 import { OfficerBubble } from "./officer-bubble";
 import { AtomicClock } from "./atomic-clock";
 import { BlackBoxLogs } from "./black-box-logs";
@@ -13,11 +19,20 @@ import { TodoList } from "./todo-list";
 import { OfficerSelectModal } from "./officer-select-modal";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
+import { TASKS_CHANGED_EVENT, emitClientEvent } from "@/lib/client-events";
 import {
-  STATS_CHANGED_EVENT,
-  TASKS_CHANGED_EVENT,
-  emitClientEvent,
-} from "@/lib/client-events";
+  getExecuteBlockedMessage,
+  toScheduledTaskLike,
+  type ScheduledTaskLike,
+} from "@/lib/schedule-execution";
+import { useScheduleTaskReminders } from "@/hooks/use-schedule-task-reminders";
+import { recordTaskExecutionFailure, recordTaskExecutionSuccess } from "@/lib/record-task-execution";
+import {
+  markSupervisionLaunched,
+  readSupervisionRun,
+  setSupervisionRun,
+  startSupervisionRun,
+} from "@/lib/supervision-run";
 
 type LogEntry = { time: string; text: string; type: "normal" | "warning" | "success" };
 type Task = {
@@ -26,7 +41,11 @@ type Task = {
   durationMinutes: number;
   category: string;
   checked: boolean;
+  scheduledStartAt?: string | null;
+  scheduledEndAt?: string | null;
 };
+
+const DEFAULT_FOCUS_SECONDS = 25 * 60;
 
 function getNowStr() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -76,9 +95,12 @@ function playChime() {
 }
 
 export function MonitorScreen() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading, promptLogin } = useAuth();
   const [currentOfficerId, setCurrentOfficerId] = useState("yuri");
-  const [timer, setTimer] = useState(1500);
+  const [focusSeconds, setFocusSeconds] = useState(DEFAULT_FOCUS_SECONDS);
+  const [timer, setTimer] = useState(DEFAULT_FOCUS_SECONDS);
   const [timerRunning, setTimerRunning] = useState(false);
   const [isDistracted, setIsDistracted] = useState(false);
   const [mockEventText, setMockEventText] = useState("一切正常");
@@ -94,7 +116,19 @@ export function MonitorScreen() {
   const [selectedTask, setSelectedTask] = useState<{ id: number; text: string } | null>(null);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const crtRef = useRef<CrtMonitorHandle>(null);
+  const executeHandledRef = useRef(false);
   const activeOfficer = OFFICERS.find((o) => o.id === currentOfficerId) ?? OFFICERS[0];
+
+  const pendingScheduledTasks: ScheduledTaskLike[] = tasks
+    .filter((task) => !task.checked && task.scheduledStartAt && task.scheduledEndAt)
+    .map(toScheduledTaskLike);
+
+  const { now: reminderNow } = useScheduleTaskReminders({
+    tasks: pendingScheduledTasks,
+    enabled: Boolean(user) && !authLoading,
+    enableBrowserNotification: true,
+  });
 
   const syncTopTask = useCallback((items: Task[], activeTask?: string | null) => {
     if (activeTask?.trim()) {
@@ -112,6 +146,71 @@ export function MonitorScreen() {
   const addLog = useCallback((text: string, type: LogEntry["type"] = "normal") => {
     setLogs((prev) => [{ time: getNowStr(), text, type }, ...prev.slice(0, 20)]);
   }, []);
+
+  const openSupervisionForTask = useCallback(
+    (task: { id: number; text: string; scheduledStartAt?: string | null }) => {
+      if (task.scheduledStartAt) {
+        startSupervisionRun({
+          taskId: task.id,
+          taskText: task.text,
+          scheduledStartAt: task.scheduledStartAt,
+        });
+      } else {
+        setSupervisionRun(null);
+      }
+      setSelectedTask({ id: task.id, text: task.text });
+      setShowOfficerModal(true);
+    },
+    []
+  );
+
+  const abortSupervisionRun = useCallback(
+    async (reason: string) => {
+      const run = readSupervisionRun();
+      if (!run) return false;
+
+      const officerId = run.officerId ?? currentOfficerId;
+      const ok = await recordTaskExecutionFailure({
+        taskId: run.taskId,
+        officerId,
+        distractionCount,
+        durationMinutes: Math.max(1, Math.round(focusSeconds / 60)),
+      });
+
+      try {
+        crtRef.current?.stopCamera();
+      } catch {
+        /* ignore */
+      }
+
+      setSupervisionRun(null);
+      setShowOfficerModal(false);
+      setSelectedTask(null);
+      setTimerRunning(false);
+      setTimer(focusSeconds);
+      setDistractionCount(0);
+      setIsDistracted(false);
+      setMockEventText("一切正常");
+      addLog(
+        ok
+          ? `任务执行失败已记录：${run.taskText}（${reason}）`
+          : `任务执行失败记录未保存：${run.taskText}`,
+        ok ? "warning" : "normal"
+      );
+      playBeep();
+      return ok;
+    },
+    [addLog, currentOfficerId, distractionCount, focusSeconds]
+  );
+
+  const handleSupervisionModalClose = useCallback(() => {
+    const run = readSupervisionRun();
+    if (run && !run.launched) {
+      void abortSupervisionRun("已取消监督流程");
+      return;
+    }
+    setShowOfficerModal(false);
+  }, [abortSupervisionRun]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -164,29 +263,58 @@ export function MonitorScreen() {
     };
   }, [authLoading, selectedTask, syncTopTask, user]);
 
+  useEffect(() => {
+    if (authLoading || !user || tasks.length === 0 || executeHandledRef.current) return;
+
+    const queryRaw = searchParams.get(EXECUTE_TASK_QUERY);
+    const queryId = queryRaw ? Number(queryRaw) : NaN;
+    const stashId = readStashedExecuteTaskId();
+    const taskId = Number.isFinite(queryId) ? queryId : stashId;
+    if (!taskId) return;
+
+    const task = tasks.find((item) => item.id === taskId && !item.checked);
+    if (!task) return;
+
+    const blocked =
+      task.scheduledStartAt && task.scheduledEndAt
+        ? getExecuteBlockedMessage(toScheduledTaskLike(task), reminderNow)
+        : null;
+    if (blocked) {
+      executeHandledRef.current = true;
+      clearStashedExecuteTask();
+      if (queryRaw) router.replace("/monitor");
+      alert(blocked);
+      return;
+    }
+
+    executeHandledRef.current = true;
+    clearStashedExecuteTask();
+    if (queryRaw) router.replace("/monitor");
+
+    openSupervisionForTask(task);
+    addLog(`进入任务执行：${task.text}`, "normal");
+  }, [addLog, authLoading, openSupervisionForTask, reminderNow, router, searchParams, tasks, user]);
+
   const persistCompletedSession = useCallback(async () => {
     if (!user) {
       addLog("当前为游客模式，本轮专注未保存到账号", "normal");
       return;
     }
 
-    try {
-      const res = await request("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          officerId: currentOfficerId,
-          distractionCount,
-        }),
-      });
+    const run = readSupervisionRun();
+    const ok = await recordTaskExecutionSuccess({
+      officerId: currentOfficerId,
+      distractionCount,
+      taskId: run?.taskId,
+      durationMinutes: Math.max(1, Math.round(focusSeconds / 60)),
+    });
 
-      if (res.ok) {
-        emitClientEvent(STATS_CHANGED_EVENT);
-      }
-    } catch {
+    if (ok) {
+      setSupervisionRun(null);
+    } else {
       addLog("专注记录保存失败，请稍后重试", "warning");
     }
-  }, [addLog, currentOfficerId, distractionCount, user]);
+  }, [addLog, currentOfficerId, distractionCount, focusSeconds, user]);
 
   // Timer tick
   useEffect(() => {
@@ -205,7 +333,7 @@ export function MonitorScreen() {
             }).catch(() => {});
             addLog("成功完成一轮专注！奖励15个专注币", "success");
             setDistractionCount(0);
-            return 1500;
+            return focusSeconds;
           }
           return prev - 1;
         });
@@ -218,6 +346,7 @@ export function MonitorScreen() {
     timerRunning,
     currentOfficerId,
     distractionCount,
+    focusSeconds,
     activeOfficer.name,
     addLog,
     persistCompletedSession,
@@ -233,7 +362,17 @@ export function MonitorScreen() {
   };
 
   const handleReset = () => {
-    setTimer(1500);
+    const run = readSupervisionRun();
+    if (run?.launched && timerRunning) {
+      const confirmed = window.confirm(
+        "确定要结束当前监督吗？这将记为本次任务执行失败。"
+      );
+      if (!confirmed) return;
+      void abortSupervisionRun("手动结束监督");
+      return;
+    }
+
+    setTimer(focusSeconds);
     setTimerRunning(false);
     playBeep();
     addLog("计时器已重置", "normal");
@@ -269,14 +408,21 @@ export function MonitorScreen() {
     if (officer) addLog(`切换监督官：${officer.name}`, "normal");
   };
 
-  // 处理任务开始流程
-  const handleTaskStart = (task: Task) => {
+  const handleTaskStart = (task: ScheduledTaskLike) => {
     if (!user) {
       promptLogin("登录后才能启动任务并保存专注记录。");
       return;
     }
-    setSelectedTask({ id: task.id, text: task.text });
-    setShowOfficerModal(true);
+    const full = tasks.find((item) => item.id === task.id);
+    if (!full) return;
+    if (full.scheduledStartAt && full.scheduledEndAt) {
+      const blocked = getExecuteBlockedMessage(toScheduledTaskLike(full), reminderNow);
+      if (blocked) {
+        alert(blocked);
+        return;
+      }
+    }
+    openSupervisionForTask(full);
   };
 
   const handleToggleTask = async (task: Task) => {
@@ -309,35 +455,44 @@ export function MonitorScreen() {
     }
   };
 
-  const handleLaunch = (officerId: string) => {
+  const handleLaunch = async (officerId: string) => {
     setCurrentOfficerId(officerId);
     setShowOfficerModal(false);
     const officer = OFFICERS.find((o) => o.id === officerId);
+    const fullTask = selectedTask
+      ? tasks.find((item) => item.id === selectedTask.id)
+      : undefined;
+
     if (officer && selectedTask) {
+      const minutes = Math.max(
+        15,
+        Math.min(180, Math.round(fullTask?.durationMinutes ?? 25))
+      );
+      const seconds = minutes * 60;
+      setFocusSeconds(seconds);
+      setTimer(seconds);
+      setDistractionCount(0);
       setTopTaskText(selectedTask.text);
-      addLog(`🎯 开始任务：${selectedTask.text}`, "normal");
+      markSupervisionLaunched(officerId);
+      addLog(`🎯 开始任务：${selectedTask.text}（${minutes} 分钟）`, "normal");
       addLog(`👮 监督官：${officer.name}`, "success");
       playChime();
-      
-      // 自动滚动到顶部 CRT 区域
+      setTimerRunning(true);
+
       window.scrollTo({ top: 0, behavior: "smooth" });
-      
-      // 1 秒后触发摄像头开启（模拟点击按钮）
-      setTimeout(() => {
-        const cameraBtn = document.querySelector('button[type="button"]') as HTMLButtonElement;
-        if (cameraBtn && cameraBtn.textContent?.includes("开启实景摄像头")) {
-          cameraBtn.click();
-          addLog("📹 摄像头已自动启动", "success");
-        } else {
-          // 如果自动触发失败，提示手动点击
-          alert(`✅ 任务已就绪！\n\n📹 请点击下方「开启实景摄像头」按钮\n\n${officer.name} 将实时监督你的专注状态。`);
-        }
-      }, 1000);
+
+      try {
+        await crtRef.current?.startCamera();
+        addLog("📹 摄像头已启动，摸鱼时将播放监督官视频", "success");
+      } catch {
+        addLog("请手动点击「开启实景摄像头」以开始监督", "warning");
+      }
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 pb-12 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 pb-12">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
       {/* Column 1: Officer Roster (3 cols) */}
       <aside className="lg:col-span-3 space-y-6">
@@ -352,6 +507,7 @@ export function MonitorScreen() {
       {/* Column 2: CRT Monitor + Clock (5 cols) */}
       <section className="lg:col-span-5 space-y-6">
         <CrtMonitor
+          ref={crtRef}
           isDistracted={isDistracted}
           mockEventText={mockEventText}
           officerId={currentOfficerId}
@@ -406,10 +562,11 @@ export function MonitorScreen() {
 
         <TodoList
           tasks={tasks}
+          now={reminderNow}
           canEdit={Boolean(user)}
           onRequireLogin={() => promptLogin("登录后才能查看并同步你的任务列表。")}
           onToggleTask={handleToggleTask}
-          onTaskStart={handleTaskStart}
+          onTaskStart={(task) => handleTaskStart(toScheduledTaskLike(task))}
         />
 
         {/* Officer quotes reference card */}
@@ -431,10 +588,11 @@ export function MonitorScreen() {
       <OfficerSelectModal
         taskText={selectedTask?.text ?? ""}
         isOpen={showOfficerModal}
-        onClose={() => setShowOfficerModal(false)}
+        onClose={handleSupervisionModalClose}
         onLaunch={handleLaunch}
       />
 
+    </div>
     </div>
   );
 }

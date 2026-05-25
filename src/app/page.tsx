@@ -1,5 +1,10 @@
-import { MonitorScreen } from "@/components/screens/monitor/monitor-screen";
+import { SchedulePageShell } from "@/components/layout/schedule-page-shell";
+import { ScheduleScreen } from "@/components/screens/schedule/schedule-screen";
 
 export default function HomePage() {
-  return <MonitorScreen />;
+  return (
+    <SchedulePageShell>
+      <ScheduleScreen />
+    </SchedulePageShell>
+  );
 }

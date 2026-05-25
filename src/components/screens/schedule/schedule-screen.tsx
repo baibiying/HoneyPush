@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { memory } from "@eazo/sdk";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -17,7 +18,11 @@ import {
   toAvailabilityRows,
   type AvailabilitySlotRow,
 } from "./availability-editor";
-import { buildAvailabilityWindows, type AvailabilitySlotInput } from "@/lib/ai/availability";
+import {
+  buildAvailabilityWindows,
+  getClientTimezoneOffsetMinutes,
+  type AvailabilitySlotInput,
+} from "@/lib/ai/availability";
 
 const AVAILABILITY_STORAGE_KEY = "honeypush-availability-v1";
 const SCHEDULE_SNAPSHOT_KEY = "honeypush-schedule-snapshot-v1";
@@ -99,8 +104,10 @@ async function readApiError(res: Response) {
 }
 
 export function ScheduleScreen() {
+  const router = useRouter();
   const { user, loading: authLoading, promptLogin } = useAuth();
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
+  const [tasksLoadError, setTasksLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
@@ -244,6 +251,7 @@ export function ScheduleScreen() {
         Promise.resolve().then(() => {
           if (cancelled) return;
           setTasks([]);
+          setTasksLoadError(null);
           setLoading(false);
         });
         return;
@@ -258,15 +266,25 @@ export function ScheduleScreen() {
         if (!res.ok) {
           if (cancelled) return;
           setTasks([]);
+          if (res.status === 401) {
+            setTasksLoadError(null);
+            return;
+          }
+          const message = await readApiError(res).catch(() => "任务加载失败");
+          setTasksLoadError(message);
+          console.error("[schedule] syncTasks failed:", message);
           return;
         }
 
         const items = (await res.json()) as ScheduleTask[];
         if (cancelled) return;
         setTasks(items);
-      } catch {
+        setTasksLoadError(null);
+      } catch (err) {
         if (cancelled) return;
         setTasks([]);
+        setTasksLoadError("任务加载失败，请刷新页面或稍后重试");
+        console.error("[schedule] syncTasks error:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -361,6 +379,7 @@ export function ScheduleScreen() {
           | "deadline"
           | "scheduledStartAt"
           | "scheduledEndAt"
+          | "scheduledFocusSegments"
         >
       >
     ) => {
@@ -429,6 +448,7 @@ export function ScheduleScreen() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             availability,
+            timezoneOffsetMinutes: getClientTimezoneOffsetMinutes(),
             tasks: pendingTasks.map((task) => ({
               id: task.id,
               text: task.text,
@@ -455,6 +475,7 @@ export function ScheduleScreen() {
             order: number;
             scheduledStartAt: string;
             scheduledEndAt: string;
+            focusSegments?: Array<{ startAt: string; endAt: string }>;
           }>;
           unscheduledIds?: number[];
           unscheduledTasks?: Array<{ id: number; text: string }>;
@@ -476,6 +497,7 @@ export function ScheduleScreen() {
               durationMinutes: item.durationMinutes,
               scheduledStartAt: item.scheduledStartAt,
               scheduledEndAt: item.scheduledEndAt,
+              scheduledFocusSegments: item.focusSegments ?? null,
             })
           )
         );
@@ -572,6 +594,7 @@ export function ScheduleScreen() {
         ...payload,
         scheduledStartAt: null,
         scheduledEndAt: null,
+        scheduledFocusSegments: null,
       });
       setEditingTask(null);
       playChime();
@@ -622,6 +645,14 @@ export function ScheduleScreen() {
         onOpenAddTask={() => setAddTaskOpen(true)}
         onRequireLogin={promptLogin}
         tasksPanel={
+          tasksLoadError ? (
+            <p className="text-center py-12 font-comic text-amber-100/90 text-sm px-4">
+              {tasksLoadError}
+              <span className="block mt-2 text-xs text-amber-100/70">
+                若刚更新过代码，请在项目目录执行：npm run db:migrate
+              </span>
+            </p>
+          ) : (
           <QuadrantTaskBoard
             fullscreen
             tasks={tasks}
@@ -640,6 +671,7 @@ export function ScheduleScreen() {
               void deleteTaskById(taskId);
             }}
           />
+          )
         }
         timePanel={
           <AvailabilityEditor
@@ -675,7 +707,11 @@ export function ScheduleScreen() {
           </>
         }
         schedulePanel={
-          <ScheduleCalendar key={calendarRefreshKey} tasks={tasks} embedded />
+          <ScheduleCalendar
+            key={calendarRefreshKey}
+            tasks={tasks}
+            embedded
+          />
         }
       />
 

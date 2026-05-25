@@ -1,5 +1,6 @@
-import { ScheduleScreen } from "@/components/screens/schedule/schedule-screen";
+import { redirect } from "next/navigation";
 
-export default function SchedulePage() {
-  return <ScheduleScreen />;
+/** 兼容旧链接：/schedule 重定向到首页 */
+export default function ScheduleRedirectPage() {
+  redirect("/");
 }

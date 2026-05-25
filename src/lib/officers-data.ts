@@ -7,6 +7,8 @@ export interface Officer {
   color: string;
   bgClass: string;
   slogan: string;
+  /** 摸鱼时 CRT  overlay 播放的 B 站 BV 号 */
+  alertVideoBvid: string;
   quotes: {
     idle: string;
     working: string;
@@ -22,6 +24,7 @@ export const OFFICERS: Officer[] = [
     color: "#F15A24",
     bgClass: "bg-orange-500",
     slogan: "摸鱼是对时间和自己灵魂的无耻背叛，列兵！",
+    alertVideoBvid: "BV1SwGz6tEkR",
     quotes: {
       idle: "做得很优秀，列兵！继续保持高昂的专注状态！",
       working: "时间正在一秒秒蒸发！全神贯注！不可懈怠！",
@@ -35,6 +38,7 @@ export const OFFICERS: Officer[] = [
     color: "#D946EF",
     bgClass: "bg-fuchsia-500",
     slogan: "真意外，你那可怜的脑容量竟然可以让眼神停留十分钟不看手机。",
+    alertVideoBvid: "BV1SwGz6tEkR",
     quotes: {
       idle: "哼，难得看你静下来哪怕一会儿，勉强算你及格吧。",
       working: "哎呀呀，写得真慢。要不要顾姐亲手教你什么叫效率？",
@@ -48,6 +52,7 @@ export const OFFICERS: Officer[] = [
     color: "#10B981",
     bgClass: "bg-emerald-500",
     slogan: "别着急，每学完一节我就在图书馆拐角给你做热生椰拿铁。",
+    alertVideoBvid: "BV1SwGz6tEkR",
     quotes: {
       idle: "没关系的，深呼吸，这一步走得很扎实，你真的很棒了。",
       working: "学累了吗？来，再坚持这最后的15分钟，我一直在这陪你。",

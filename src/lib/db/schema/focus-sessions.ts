@@ -1,11 +1,27 @@
-import { boolean, integer, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/pg-core";
 import type { InferSelectModel } from "drizzle-orm";
+
+export type ScheduledFocusSegmentRecord = {
+  startAt: string;
+  endAt: string;
+};
 
 // 专注记录表
 export const focusSessions = pgTable("focus_sessions", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
   officerId: varchar("officer_id", { length: 32 }).notNull().default("yuri"),
+  taskId: integer("task_id"),
+  outcome: varchar("outcome", { length: 32 }).notNull().default("completed"),
   durationMinutes: integer("duration_minutes").notNull().default(25),
   completedAt: timestamp("completed_at").notNull().defaultNow(),
   coinsEarned: integer("coins_earned").notNull().default(15),
@@ -25,6 +41,10 @@ export const tasks = pgTable("tasks", {
   deadline: timestamp("deadline"),
   scheduledStartAt: timestamp("scheduled_start_at"),
   scheduledEndAt: timestamp("scheduled_end_at"),
+  /** AI 排期产生的各段专注起止（ISO），用于日历避免番茄钟休息段误显示重叠 */
+  scheduledFocusSegments: jsonb("scheduled_focus_segments").$type<
+    ScheduledFocusSegmentRecord[] | null
+  >(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

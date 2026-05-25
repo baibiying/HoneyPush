@@ -16,8 +16,9 @@ const GAME_INPUT =
 const FROSTED_FIELD =
   "rounded-xl border border-white/25 bg-white/10 backdrop-blur-sm";
 
-const HOUR_START = 7;
-const HOUR_END = 22;
+/** 每天完整 24 小时（0:00–24:00） */
+const HOUR_START = 0;
+const HOUR_END = 24;
 const RANGE_START_MIN = HOUR_START * 60;
 const RANGE_END_MIN = HOUR_END * 60;
 const RANGE_TOTAL_MIN = RANGE_END_MIN - RANGE_START_MIN;

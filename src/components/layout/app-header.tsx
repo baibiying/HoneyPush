@@ -9,10 +9,14 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { AUTH_CHANGED_EVENT, STATS_CHANGED_EVENT } from "@/lib/client-events";
 
 const NAV_ITEMS = [
-  { href: "/",          icon: Tv,            label: "监督视窗" },
-  { href: "/schedule",  icon: CalendarDays,  label: "AI 排期" },
-  { href: "/archive",   icon: Archive,       label: "档案战报" },
-];
+  { href: "/",         icon: CalendarDays, label: "AI 排期", match: ["/", "/schedule"] },
+  { href: "/monitor",  icon: Tv,           label: "监督视窗", match: ["/monitor"] },
+  { href: "/archive",  icon: Archive,      label: "档案战报", match: ["/archive"] },
+] as const;
+
+function isNavActive(pathname: string, match: readonly string[]) {
+  return match.includes(pathname);
+}
 
 export function AppHeader() {
   const [coinCount, setCoinCount] = useState(0);
@@ -130,7 +134,7 @@ export function AppHeader() {
         <div className="hidden md:flex items-center gap-3">
           {/* 桌面端导航按钮 */}
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = isNavActive(pathname, item.match);
             const Icon = item.icon;
             return (
               <Link

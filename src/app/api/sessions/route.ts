@@ -18,9 +18,26 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const officerId = body.officerId ?? "yuri";
-  const distractionCount = body.distractionCount ?? 0;
+  const distractionCount = Number(body.distractionCount ?? 0);
+  const outcome =
+    body.outcome === "failed" ? ("failed" as const) : ("completed" as const);
+  const taskId =
+    typeof body.taskId === "number" && Number.isFinite(body.taskId)
+      ? body.taskId
+      : null;
+  const durationMinutes =
+    typeof body.durationMinutes === "number" && body.durationMinutes > 0
+      ? Math.round(body.durationMinutes)
+      : 25;
 
-  const session = await createFocusSession(userId, officerId, distractionCount);
-  const stats = await upsertUserStats(userId, session.coinsEarned);
+  const session = await createFocusSession(userId, officerId, distractionCount, {
+    outcome,
+    taskId,
+    durationMinutes,
+  });
+  const stats =
+    outcome === "completed"
+      ? await upsertUserStats(userId, session.coinsEarned)
+      : await upsertUserStats(userId, 0);
   return NextResponse.json({ session, stats });
 }

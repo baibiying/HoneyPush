@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
-import { TaskHoverDetail } from "./task-hover-detail";
+import {
+  TaskHoverTooltipPortal,
+  getTaskTooltipPosition,
+  type TaskTooltipPosition,
+} from "./task-hover-detail";
 import {
   MATRIX_GRID_ORDER,
   getQuadrantMeta,
@@ -119,6 +123,16 @@ type TaskBubbleProps = {
 function TaskBubble({ task, layout, menuOpen, onMenuToggle, onEdit, onDelete }: TaskBubbleProps) {
   const scheduled = isTaskScheduled(task);
   const label = taskDisplayText(task.text);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState<TaskTooltipPosition | null>(null);
+
+  const openTooltip = () => {
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltipPos(getTaskTooltipPosition(rect));
+    setHovered(true);
+  };
 
   return (
     <div
@@ -130,14 +144,17 @@ function TaskBubble({ task, layout, menuOpen, onMenuToggle, onEdit, onDelete }: 
         height: layout.size,
         transform: `translate(-50%, -50%) rotate(${layout.rotate}deg)`,
         animationDelay: `${layout.delay}s`,
-        zIndex: menuOpen ? 40 : undefined,
+        zIndex: menuOpen || hovered ? 40 : undefined,
       }}
     >
       <div
+        ref={anchorRef}
         className={[
           "relative w-full h-full bubble-float",
           menuOpen ? "z-40" : "z-10 group-hover:z-30",
         ].join(" ")}
+        onMouseEnter={openTooltip}
+        onMouseLeave={() => setHovered(false)}
       >
         <button
           type="button"
@@ -174,8 +191,6 @@ function TaskBubble({ task, layout, menuOpen, onMenuToggle, onEdit, onDelete }: 
           )}
         </button>
 
-        <TaskHoverDetail task={task} />
-
         {menuOpen && (
           <div
             className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+6px)] z-50 min-w-[7.5rem] rounded-xl border border-neutral-200 bg-white shadow-xl overflow-hidden"
@@ -199,6 +214,7 @@ function TaskBubble({ task, layout, menuOpen, onMenuToggle, onEdit, onDelete }: 
           </div>
         )}
       </div>
+      <TaskHoverTooltipPortal task={task} open={hovered} position={tooltipPos} />
     </div>
   );
 }

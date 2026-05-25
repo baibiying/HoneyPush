@@ -5,10 +5,33 @@ import type { Task } from "../schema/focus-sessions";
 
 // ─── Focus Sessions ──────────────────────────────────────────────────────────
 
-export async function createFocusSession(userId: string, officerId: string, distractionCount: number = 0) {
+export type FocusSessionOutcome = "completed" | "failed";
+
+export async function createFocusSession(
+  userId: string,
+  officerId: string,
+  distractionCount: number = 0,
+  options?: {
+    outcome?: FocusSessionOutcome;
+    taskId?: number | null;
+    coinsEarned?: number;
+    durationMinutes?: number;
+  }
+) {
+  const outcome = options?.outcome ?? "completed";
+  const coinsEarned = options?.coinsEarned ?? (outcome === "completed" ? 15 : 0);
+
   const rows = await db
     .insert(focusSessions)
-    .values({ userId, officerId, coinsEarned: 15, distractionCount })
+    .values({
+      userId,
+      officerId,
+      taskId: options?.taskId ?? null,
+      outcome,
+      distractionCount,
+      coinsEarned,
+      durationMinutes: options?.durationMinutes ?? 25,
+    })
     .returning();
   return rows[0];
 }
@@ -59,6 +82,7 @@ export async function updateTask(
       | "deadline"
       | "scheduledStartAt"
       | "scheduledEndAt"
+      | "scheduledFocusSegments"
     >
   >
 ) {

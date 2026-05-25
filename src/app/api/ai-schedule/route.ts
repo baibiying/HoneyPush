@@ -4,7 +4,10 @@ import {
   buildFallbackScheduleFromTasks,
   type AiScheduleItem,
 } from "@/lib/ai/fallback-schedule";
-import { parseAvailabilityFromBody } from "@/lib/ai/availability";
+import {
+  parseAvailabilityFromBody,
+  parseTimezoneOffsetMinutes,
+} from "@/lib/ai/availability";
 import { rankTasksForSchedule } from "@/lib/ai/schedule-priority";
 import { assignScheduleTimes } from "@/lib/ai/schedule-times";
 import { requireUser } from "@/lib/auth/session";
@@ -68,11 +71,13 @@ function buildDeadlinesMap(sourceTasks: IncomingTask[]) {
 function normalizeSchedule(
   raw: unknown,
   sourceTasks: IncomingTask[],
-  availability: import("@/lib/ai/availability").AvailabilitySlotInput[]
+  availability: import("@/lib/ai/availability").AvailabilitySlotInput[],
+  timezoneOffsetMinutes: number
 ): { schedule: AiScheduleItem[]; unscheduledIds: number[] } {
   const deadlinesById = buildDeadlinesMap(sourceTasks);
 
-  const baseFromFallback = () => buildFallbackScheduleFromTasks(sourceTasks, availability);
+  const baseFromFallback = () =>
+    buildFallbackScheduleFromTasks(sourceTasks, availability, timezoneOffsetMinutes);
 
   if (!raw || typeof raw !== "object" || !("schedule" in raw)) {
     return baseFromFallback();
@@ -134,7 +139,7 @@ function normalizeSchedule(
     deadlinesById
   );
 
-  return assignScheduleTimes(ranked, deadlinesById, availability);
+  return assignScheduleTimes(ranked, deadlinesById, availability, timezoneOffsetMinutes);
 }
 
 export async function POST(req: NextRequest) {
@@ -143,7 +148,18 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const incoming: unknown[] = Array.isArray(body?.tasks) ? body.tasks : [];
-  const availability = parseAvailabilityFromBody(body?.availability);
+  const timezoneOffsetMinutes = parseTimezoneOffsetMinutes(body?.timezoneOffsetMinutes);
+  if (timezoneOffsetMinutes === undefined) {
+    return NextResponse.json(
+      { error: "缺少客户端时区信息，请刷新页面后重试" },
+      { status: 400 }
+    );
+  }
+
+  const availability = parseAvailabilityFromBody(
+    body?.availability,
+    timezoneOffsetMinutes
+  );
 
   if (!availability) {
     return NextResponse.json(
@@ -197,12 +213,21 @@ export async function POST(req: NextRequest) {
   };
 
   const runSchedule = (parsed: unknown) => {
-    const { schedule, unscheduledIds } = normalizeSchedule(parsed, sourceTasks, availability);
+    const { schedule, unscheduledIds } = normalizeSchedule(
+      parsed,
+      sourceTasks,
+      availability,
+      timezoneOffsetMinutes
+    );
     return { schedule, unscheduledIds };
   };
 
   if (!privateKey) {
-    const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(sourceTasks, availability);
+    const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(
+      sourceTasks,
+      availability,
+      timezoneOffsetMinutes
+    );
     return buildResponse(schedule, unscheduledIds, "fallback");
   }
 
@@ -229,7 +254,11 @@ export async function POST(req: NextRequest) {
     return buildResponse(schedule, unscheduledIds, "ai");
   } catch (err) {
     console.error("AI schedule error:", err);
-    const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(sourceTasks, availability);
+    const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(
+      sourceTasks,
+      availability,
+      timezoneOffsetMinutes
+    );
     return buildResponse(schedule, unscheduledIds, "fallback");
   }
 }

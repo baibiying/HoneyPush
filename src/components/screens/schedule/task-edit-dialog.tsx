@@ -31,6 +31,7 @@ export type ScheduleTask = {
   deadline: string | null;
   scheduledStartAt: string | null;
   scheduledEndAt: string | null;
+  scheduledFocusSegments?: Array<{ startAt: string; endAt: string }> | null;
 };
 
 export const CATEGORY_OPTIONS = [

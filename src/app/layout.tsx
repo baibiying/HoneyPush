@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { AppHeader } from "@/components/layout/app-header";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { GlobalScheduledTaskRunner } from "@/components/layout/global-scheduled-task-runner";
+import { GlobalUpcomingTaskToasts } from "@/components/layout/global-upcoming-task-toasts";
 
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -61,6 +63,8 @@ export default function RootLayout({
       </head>
       <body className="comic-bg-pattern min-h-svh flex flex-col">
         <AuthProvider>
+          <GlobalUpcomingTaskToasts />
+          <GlobalScheduledTaskRunner />
           {/* Header — sticky at top */}
           <AppHeader />
           {/* Main content

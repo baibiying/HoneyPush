@@ -1,6 +1,13 @@
 "use client";
 
 import { CheckCircle2, Circle, ListTodo, ArrowRight } from "lucide-react";
+import {
+  canExecuteScheduledTask,
+  formatMinutesUntilStart,
+  getExecuteBlockedMessage,
+  getTaskExecutionPhase,
+  toScheduledTaskLike,
+} from "@/lib/schedule-execution";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -10,6 +17,21 @@ interface Task {
   durationMinutes: number;
   category: string;
   checked: boolean;
+  scheduledStartAt?: string | null;
+  scheduledEndAt?: string | null;
+}
+
+function formatScheduledSlot(task: Task) {
+  if (!task.scheduledStartAt) return null;
+  const start = new Date(task.scheduledStartAt);
+  if (Number.isNaN(start.getTime())) return null;
+  return start.toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 const CATEGORY_ORDER = [
@@ -28,6 +50,7 @@ const CATEGORY_META: Record<string, { label: string; color: string; bg: string; 
 
 interface TodoListProps {
   tasks: Task[];
+  now?: Date;
   canEdit: boolean;
   onRequireLogin: () => void;
   onToggleTask: (task: Task) => void;
@@ -36,6 +59,7 @@ interface TodoListProps {
 
 export function TodoList({
   tasks,
+  now = new Date(),
   canEdit,
   onRequireLogin,
   onToggleTask,
@@ -49,7 +73,16 @@ export function TodoList({
     return Number(a.checked) - Number(b.checked);
   });
 
-  const pending = sorted.filter((t) => !t.checked);
+  const scheduledPending = sorted
+    .filter((t) => !t.checked && t.scheduledStartAt && t.scheduledEndAt)
+    .sort(
+      (a, b) =>
+        new Date(a.scheduledStartAt!).getTime() - new Date(b.scheduledStartAt!).getTime()
+    );
+
+  const pending = sorted.filter(
+    (t) => !t.checked && (!t.scheduledStartAt || !t.scheduledEndAt)
+  );
   const done = sorted.filter((t) => t.checked);
 
   return (
@@ -61,7 +94,7 @@ export function TodoList({
           <h4 className="font-bangers text-lg text-[#1C1917] tracking-wide">MISSION LIST</h4>
         </div>
         <Link
-          href="/schedule"
+          href="/"
           className="flex items-center gap-1 text-[10px] font-bold text-neutral-500 hover:text-[#1C1917] border border-dashed border-neutral-300 px-2 py-0.5 hover:border-black transition-colors"
         >
           <span>去排期</span>
@@ -76,7 +109,7 @@ export function TodoList({
           </p>
           {canEdit ? (
             <Link
-              href="/schedule"
+              href="/"
               className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 hover:text-amber-700 underline"
             >
               前往 AI 排期添加 <ArrowRight className="w-3 h-3" />
@@ -94,6 +127,75 @@ export function TodoList({
       ) : (
         <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-0.5">
           <AnimatePresence initial={false}>
+            {scheduledPending.length > 0 && (
+              <div className="mb-2 pb-2 border-b-2 border-dashed border-amber-200">
+                <p className="text-[9px] font-black uppercase tracking-wider text-amber-700 mb-1.5 px-1">
+                  今日排期 · 仅在开始至结束时段内可执行
+                </p>
+                {scheduledPending.map((task) => {
+                  const meta = CATEGORY_META[task.category] ?? CATEGORY_META["import-noturgent"];
+                  const slot = formatScheduledSlot(task);
+                  const scheduled = toScheduledTaskLike(task);
+                  const phase = getTaskExecutionPhase(scheduled, now);
+                  const executable = canExecuteScheduledTask(scheduled, now);
+                  return (
+                    <motion.div
+                      key={`scheduled-${task.id}`}
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={[
+                        `flex items-start gap-2 p-2 mb-1.5 border-2 ${meta.bg} transition-colors`,
+                        executable
+                          ? "border-emerald-500 cursor-pointer group hover:bg-emerald-100/80"
+                          : phase === "upcoming"
+                            ? "border-amber-400/70 opacity-80 cursor-default"
+                            : "border-neutral-300 opacity-50 cursor-default",
+                      ].join(" ")}
+                      onClick={() => {
+                        if (!canEdit) {
+                          onRequireLogin();
+                          return;
+                        }
+                        if (executable) {
+                          onTaskStart?.(task);
+                          return;
+                        }
+                        const blocked = getExecuteBlockedMessage(scheduled, now);
+                        if (blocked) alert(blocked);
+                      }}
+                    >
+                      <Circle
+                        className={[
+                          "w-4 h-4 mt-0.5 shrink-0 transition-colors",
+                          executable
+                            ? "text-emerald-600 group-hover:text-emerald-700"
+                            : "text-amber-600",
+                        ].join(" ")}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-bold text-neutral-800 break-words leading-snug block">
+                          {task.text}
+                        </span>
+                        {slot ? (
+                          <span className="text-[10px] font-semibold text-amber-800/90 tabular-nums block">
+                            {slot} 起
+                            {phase === "upcoming" ? ` · ${formatMinutesUntilStart(scheduled, now)}` : null}
+                            {phase === "active" ? " · 现在可执行" : null}
+                            {phase === "ended" ? " · 时段已结束" : null}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span
+                        className={`shrink-0 ${meta.color} text-white text-[9px] font-black w-4 h-4 flex items-center justify-center`}
+                      >
+                        {meta.label}
+                      </span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+
             {pending.map((task) => {
               const meta = CATEGORY_META[task.category] ?? CATEGORY_META["import-noturgent"];
               return (

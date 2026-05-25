@@ -39,6 +39,11 @@ export function focusMinutesToWallClockMinutes(focusMinutes: number) {
   return planPomodoroSegments(focusMinutes).reduce((sum, segment) => sum + segment.minutes, 0);
 }
 
+export type ScheduledFocusSegment = {
+  startAt: string;
+  endAt: string;
+};
+
 export type TimedScheduleItem = {
   id: number;
   category: string;
@@ -46,6 +51,7 @@ export type TimedScheduleItem = {
   order: number;
   scheduledStartAt: string;
   scheduledEndAt: string;
+  focusSegments: ScheduledFocusSegment[];
 };
 
 export type TaskFocusSegment = {
@@ -135,6 +141,7 @@ function placeTaskWithPomodoros(
   const segments = planPomodoroSegments(item.durationMinutes);
   let firstFocusStart: Date | null = null;
   let lastFocusEnd: Date | null = null;
+  const focusSegments: ScheduledFocusSegment[] = [];
   let notBefore = scheduleStartAfter;
 
   for (const segment of segments) {
@@ -151,6 +158,10 @@ function placeTaskWithPomodoros(
 
     if (!firstFocusStart) firstFocusStart = slot.start;
     lastFocusEnd = slot.end;
+    focusSegments.push({
+      startAt: slot.start.toISOString(),
+      endAt: slot.end.toISOString(),
+    });
 
     occupied.push({ start: slot.start.getTime(), end: slot.end.getTime() });
     notBefore = slot.end;
@@ -165,16 +176,47 @@ function placeTaskWithPomodoros(
       ...item,
       scheduledStartAt: firstFocusStart.toISOString(),
       scheduledEndAt: lastFocusEnd.toISOString(),
+      focusSegments,
     },
     notBefore,
   };
 }
 
+function parseStoredFocusSegments(
+  raw: unknown
+): ScheduledFocusSegment[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const parsed: ScheduledFocusSegment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { startAt?: unknown; endAt?: unknown };
+    const startAt = String(row.startAt ?? "");
+    const endAt = String(row.endAt ?? "");
+    if (!startAt || !endAt) continue;
+    if (Number.isNaN(new Date(startAt).getTime())) continue;
+    if (Number.isNaN(new Date(endAt).getTime())) continue;
+    parsed.push({ startAt, endAt });
+  }
+  return parsed.length > 0 ? parsed : null;
+}
+
 export function expandScheduledTaskToFocusSegments(task: {
   id: number;
   scheduledStartAt: string | null;
+  scheduledEndAt?: string | null;
   durationMinutes: number;
+  scheduledFocusSegments?: unknown;
 }): TaskFocusSegment[] {
+  const stored = parseStoredFocusSegments(task.scheduledFocusSegments);
+  if (stored) {
+    return stored.map((segment, segmentIndex) => ({
+      taskId: task.id,
+      segmentIndex,
+      startAt: segment.startAt,
+      endAt: segment.endAt,
+    }));
+  }
+
   if (!task.scheduledStartAt) return [];
 
   const segments = planPomodoroSegments(task.durationMinutes);
@@ -217,9 +259,14 @@ export function assignScheduleTimes(
   }>,
   deadlinesById: Map<number, Date | null>,
   availabilitySlots: AvailabilitySlotInput[],
+  timezoneOffsetMinutes?: number,
   now = new Date()
 ): AssignScheduleResult {
-  const windows = buildAvailabilityWindows(availabilitySlots, now);
+  const windows = buildAvailabilityWindows(
+    availabilitySlots,
+    now,
+    timezoneOffsetMinutes
+  );
   const sorted = [...items].sort((a, b) => compareTasksForSchedule(a, b, deadlinesById));
 
   if (windows.length === 0) {

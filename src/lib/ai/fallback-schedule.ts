@@ -44,7 +44,8 @@ export function buildFallbackScheduleFromTasks(
     category?: string;
     deadline?: string | null;
   }>,
-  availability: AvailabilitySlotInput[]
+  availability: AvailabilitySlotInput[],
+  timezoneOffsetMinutes?: number
 ) {
   const deadlinesById = new Map<number, Date | null>();
 
@@ -66,7 +67,7 @@ export function buildFallbackScheduleFromTasks(
   });
 
   const ranked = rankTasksForSchedule(base, deadlinesById);
-  return assignScheduleTimes(ranked, deadlinesById, availability);
+  return assignScheduleTimes(ranked, deadlinesById, availability, timezoneOffsetMinutes);
 }
 
 export function buildFallbackSchedule(input: string): { tasks: AiScheduleTask[] } {

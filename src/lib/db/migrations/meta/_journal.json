@@ -15,6 +15,20 @@
       "when": 1779683072411,
       "tag": "0001_task_schedule_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779683072412,
+      "tag": "0002_focus_session_outcome",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779683072413,
+      "tag": "0003_task_focus_segments",
+      "breakpoints": true
     }
   ]
 }
