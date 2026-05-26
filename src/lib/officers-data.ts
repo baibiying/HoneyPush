@@ -1,6 +1,17 @@
 export type OfficerId = "yuri" | "gu" | "lin";
 
-/** 监督官片段最长播放秒数（试看 / 摸鱼警报） */
+/**
+ * 监督官配置（修改卡片与视频对应关系时改这里）：
+ *
+ * | 字段 | 作用 |
+ * |------|------|
+ * | title | 卡片立绘下称号、弹窗标题旁说明 |
+ * | slogan | 卡片台词气泡 |
+ * | alertVideoBvid / previewVideoBvid | B 站 BV，试看与摸鱼警报 |
+ * | *VideoStartSec / *VideoDurationSec | 只播片段（最长 OFFICER_CLIP_MAX_DURATION_SEC） |
+ *
+ * 第二位、第三位建议：文案气质与 BV 内容一致（严厉督促 vs 安静陪读）。
+ */
 export const OFFICER_CLIP_MAX_DURATION_SEC = 20;
 
 export interface Officer {
@@ -10,19 +21,12 @@ export interface Officer {
   color: string;
   bgClass: string;
   slogan: string;
-  /** 摸鱼时 CRT overlay 播放的 B 站 BV 号 */
   alertVideoBvid: string;
-  /** 选角页预览片段 BV 号（默认同 alertVideoBvid） */
   previewVideoBvid?: string;
-  /** 直连 MP4 地址（优先于 BV 解析，不经 B 站播放器） */
   previewVideoSrc?: string;
-  /** 预览从第几秒开始播放 */
   previewVideoStartSec?: number;
-  /** 预览片段时长（秒）；未设置则播到视频结束 */
   previewVideoDurationSec?: number;
-  /** 摸鱼警报从第几秒开始 */
   alertVideoStartSec?: number;
-  /** 摸鱼警报片段时长（秒）；未设置则播到视频结束 */
   alertVideoDurationSec?: number;
   quotes: {
     idle: string;
@@ -51,41 +55,43 @@ export const OFFICERS: Officer[] = [
   {
     id: "gu",
     name: "顾姐",
-    title: "冷酷特工·前任毒舌学姐",
+    title: "苏联督学·毒舌旁白",
     color: "#D946EF",
     bgClass: "bg-fuchsia-500",
-    slogan: "真意外，你那可怜的脑容量竟然可以让眼神停留十分钟不看手机。",
+    slogan:
+      "视频里那位苏联督教官正盯着你呢——你还要继续摸鱼？行啊，反正挂科的不是我。",
+    /** 苏联二战军官监督（2h）· 开头为军官出镜督促 */
     alertVideoBvid: "BV1NjQLBEEyQ",
     previewVideoBvid: "BV1NjQLBEEyQ",
-    /** 长视频开头为军官出镜督促片段 */
     previewVideoStartSec: 0,
     previewVideoDurationSec: OFFICER_CLIP_MAX_DURATION_SEC,
     alertVideoStartSec: 0,
     alertVideoDurationSec: OFFICER_CLIP_MAX_DURATION_SEC,
     quotes: {
-      idle: "哼，难得看你静下来哪怕一会儿，勉强算你及格吧。",
-      working: "哎呀呀，写得真慢。要不要顾姐亲手教你什么叫效率？",
-      warning: "抓包了哦，小家伙。是考研题太简单，还是觉得你下半辈子能靠摸鱼发家致富？",
+      idle: "哼，难得看你静下来哪怕一会儿，屏幕里那位督教官总算能歇口气。",
+      working: "写得这么慢？苏联督教官都比你着急，别让他看笑话。",
+      warning: "抓包！督教官在视频里盯着你呢，你倒好，手机先玩上了？",
     },
   },
   {
     id: "lin",
     name: "林风师兄",
-    title: "治愈阳光·暖流加油站",
+    title: "同志 LoFi·静伴自习",
     color: "#10B981",
     bgClass: "bg-emerald-500",
-    slogan: "别着急，每学完一节我就在图书馆拐角给你做热生椰拿铁。",
+    slogan:
+      "跟着画面里的苏联 LoFi 一起学就好，不吵不催，师兄在，累了就喝口水再接着来。",
+    /** 和同志一起学习 · 1 小时苏联 LoFi 陪读 */
     alertVideoBvid: "BV1ya5D6WELy",
     previewVideoBvid: "BV1ya5D6WELy",
-    /** 长视频开头为军官出镜陪伴片段 */
     previewVideoStartSec: 0,
     previewVideoDurationSec: OFFICER_CLIP_MAX_DURATION_SEC,
     alertVideoStartSec: 0,
     alertVideoDurationSec: OFFICER_CLIP_MAX_DURATION_SEC,
     quotes: {
       idle: "没关系的，深呼吸，这一步走得很扎实，你真的很棒了。",
-      working: "学累了吗？来，再坚持这最后的15分钟，我一直在这陪你。",
-      warning: "哎呀呀，怎么走神了？说好这半小时一起跟困难死磕的，不许丢下我一个人看手机哦！",
+      working: "就这样慢慢学，有 LoFi 陪着，节奏会很稳的。",
+      warning: "走神啦？没关系，喝口水，我们再把这 15 分钟一起走完。",
     },
   },
 ];
@@ -94,7 +100,6 @@ export function getOfficerPreviewBvid(officer: Officer): string {
   return officer.previewVideoBvid ?? officer.alertVideoBvid;
 }
 
-/** 选角预览：原生 video 播放地址（经服务端代理，无 B 站播放器 UI） */
 export function getOfficerPreviewVideoSrc(officer: Officer): string {
   if (officer.previewVideoSrc) return officer.previewVideoSrc;
   const bvid = getOfficerPreviewBvid(officer);
