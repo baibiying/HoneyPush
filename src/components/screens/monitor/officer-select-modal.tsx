@@ -60,7 +60,7 @@ export function OfficerSelectModal({
                   选择监督官
                 </h2>
                 <p className="text-xs text-white/80 font-comic mt-1">
-                  任务已到开始时间，选择后将自动开启摄像头监督
+                  尚未在排期地图选定监督官；选择后将自动开启摄像头监督
                 </p>
               </div>
 

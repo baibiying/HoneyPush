@@ -1,5 +1,5 @@
-import { CalendarDays, Clock, LayoutGrid, Plus } from "lucide-react";
-export type ScheduleScene = "map" | "tasks" | "time" | "calendar";
+import { CalendarDays, Clock, LayoutGrid, Plus, Shield } from "lucide-react";
+export type ScheduleScene = "map" | "tasks" | "time" | "calendar" | "officer";
 
 export type StationConfig = {
   id: ScheduleScene;
@@ -101,5 +101,24 @@ export const STATIONS: StationConfig[] = [
     islandSandDeep: "#c026d3",
     shoreStroke: "#fdf4ff",
     accentGlow: "rgba(192,132,252,0.55)",
+  },
+  {
+    id: "officer",
+    action: "enter",
+    title: "选择监督官",
+    subtitle: "选定默认监督官 · 到点自动开摄像头",
+    icon: Shield,
+    gradient: "from-orange-400 via-red-500 to-red-800",
+    glow: "shadow-[0_0_32px_rgba(239,68,68,0.55)]",
+    shore: "from-orange-100 to-red-200",
+    decor: "👮",
+    islandPath:
+      "M 8 38 C 4 18, 28 4, 52 6 C 78 8, 94 28, 92 52 C 90 76, 68 90, 42 88 C 18 86, 6 62, 8 38 Z",
+    islandFillTop: "#fb923c",
+    islandFillBottom: "#7f1d1d",
+    islandSand: "#fed7aa",
+    islandSandDeep: "#c2410c",
+    shoreStroke: "#fff7ed",
+    accentGlow: "rgba(239,68,68,0.55)",
   },
 ];

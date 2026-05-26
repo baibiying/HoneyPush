@@ -11,6 +11,12 @@ import { TaskEditDialog, type ScheduleTask } from "./task-edit-dialog";
 import { QuadrantTaskBoard } from "./quadrant-task-board";
 import { ScheduleCalendar } from "./schedule-calendar";
 import { ScheduleGameHub, type ScheduleScene } from "./schedule-game-hub";
+import { ScheduleOfficerPanel } from "./schedule-officer-panel";
+import {
+  PREFERRED_OFFICER_CHANGED_EVENT,
+  readPreferredOfficer,
+} from "@/lib/preferred-officer";
+import type { OfficerId } from "@/lib/officers-data";
 import { SchedulePromptOverlay } from "./schedule-prompt-overlay";
 import { ScheduleUnscheduledNotice } from "./schedule-unscheduled-notice";
 import {
@@ -117,6 +123,7 @@ export function ScheduleScreen() {
   const [openTaskMenuId, setOpenTaskMenuId] = useState<number | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [scene, setScene] = useState<ScheduleScene>("map");
+  const [preferredOfficerId, setPreferredOfficerId] = useState<OfficerId | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [schedulePromptOpen, setSchedulePromptOpen] = useState(false);
   const [unscheduledNotice, setUnscheduledNotice] = useState<{
@@ -126,6 +133,13 @@ export function ScheduleScreen() {
   const prevSceneRef = useRef<ScheduleScene>("map");
 
   const canEdit = Boolean(user);
+
+  useEffect(() => {
+    setPreferredOfficerId(readPreferredOfficer());
+    const refresh = () => setPreferredOfficerId(readPreferredOfficer());
+    window.addEventListener(PREFERRED_OFFICER_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(PREFERRED_OFFICER_CHANGED_EVENT, refresh);
+  }, []);
 
   const stats = useMemo(() => {
     const pending = tasks.filter((task) => !task.checked).length;
@@ -213,8 +227,14 @@ export function ScheduleScreen() {
         done: scheduledCount > 0,
         scene: "calendar" as const,
       },
+      {
+        id: "officer",
+        label: "选择监督官",
+        done: preferredOfficerId !== null,
+        scene: "officer" as const,
+      },
     ],
-    [stats.total, validAvailabilityCount, scheduledCount]
+    [stats.total, validAvailabilityCount, scheduledCount, preferredOfficerId]
   );
 
   useEffect(() => {
@@ -714,6 +734,14 @@ export function ScheduleScreen() {
             key={calendarRefreshKey}
             tasks={tasks}
             embedded
+          />
+        }
+        officerPanel={
+          <ScheduleOfficerPanel
+            selectedId={preferredOfficerId}
+            canEdit={canEdit}
+            onSelected={setPreferredOfficerId}
+            onRequireLogin={promptLogin}
           />
         }
       />

@@ -4,27 +4,33 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { QuestStep } from "./schedule-game-hub";
 import { STATIONS, type StationConfig } from "./schedule-stations";
 
-/** 岛屿中心点（百分比，相对地图区域） */
+/** 可滚动地图画布最小高度 */
+const MAP_SCROLL_MIN_HEIGHT_PX = 1080;
+
+/** 岛屿中心点（百分比，相对可滚动地图画布） */
 const ISLAND_CENTERS = [
-  { left: "20%", top: "34%" },
-  { left: "80%", top: "30%" },
-  { left: "22%", top: "76%" },
-  { left: "78%", top: "72%" },
+  { left: "20%", top: "18%" },
+  { left: "80%", top: "16%" },
+  { left: "22%", top: "48%" },
+  { left: "78%", top: "46%" },
+  { left: "50%", top: "76%" },
 ] as const;
 
-/** viewBox 0–100：石子路（创建→查看→时段→排期） */
+/** viewBox 0–100：石子路（创建→查看→时段→排期→监督官） */
 const PATH_SEGMENTS = [
-  "M 20 34 C 48 26, 52 26, 80 30",
-  "M 80 30 C 74 48, 36 62, 22 76",
-  "M 22 76 C 48 80, 58 76, 78 72",
+  "M 20 18 C 48 14, 52 14, 80 16",
+  "M 80 16 C 74 32, 36 42, 22 48",
+  "M 22 48 C 48 50, 58 46, 78 46",
+  "M 78 46 C 64 56, 58 66, 50 76",
 ] as const;
 
 /** 岛屿接驳石台 */
 const PATH_DOCKS = [
-  { cx: 20, cy: 34, rot: -8 },
-  { cx: 80, cy: 30, rot: 12 },
-  { cx: 22, cy: 76, rot: 125 },
-  { cx: 78, cy: 72, rot: -5 },
+  { cx: 20, cy: 18, rot: -8 },
+  { cx: 80, cy: 16, rot: 12 },
+  { cx: 22, cy: 48, rot: 125 },
+  { cx: 78, cy: 46, rot: -5 },
+  { cx: 50, cy: 76, rot: 175 },
 ] as const;
 
 /** 不规则石块轮廓（中心为原点，约 ±1 单位） */
@@ -358,6 +364,17 @@ const ISLAND_TERRAIN: Record<
       { cx: 30, cy: 58, r: 9 },
     ],
   },
+  4: {
+    rocks: [
+      { cx: 12, cy: 62, rx: 2.4, ry: 1.6 },
+      { cx: 88, cy: 58, rx: 2.8, ry: 1.8 },
+      { cx: 50, cy: 14, rx: 2, ry: 1.3 },
+    ],
+    hills: [
+      { cx: 42, cy: 48, r: 11 },
+      { cx: 62, cy: 62, r: 8 },
+    ],
+  },
 };
 
 function PalmTree({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
@@ -451,32 +468,60 @@ function IslandThemeDecor({ stepIndex }: { stepIndex: number }) {
           <circle cx={70} cy={48} r={0.6} fill="#fafafa" opacity="0.6" className="game-sparkle" style={{ animationDelay: "0.8s" }} />
         </>
       );
+    case 4:
+      return (
+        <>
+          <g transform="translate(50 22)">
+            <rect x={-0.6} y={0} width={1.2} height={7} fill="#57534e" stroke="#1c1917" strokeWidth="0.2" />
+            <rect x={-4} y={1.5} width={8} height={4.5} fill="#dc2626" stroke="#1c1917" strokeWidth="0.22" />
+            <circle cx={0} cy={0} r={1.2} fill="#fbbf24" stroke="#1c1917" strokeWidth="0.2" />
+          </g>
+          <g transform="translate(22 58)">
+            <rect x={-3} y={2} width={6} height={4} fill="#78716c" stroke="#1c1917" strokeWidth="0.2" />
+            <path d="M-3 2 L0 -1 L3 2 Z" fill="#a8a29e" stroke="#1c1917" strokeWidth="0.18" />
+          </g>
+          <ellipse cx={72} cy={68} rx={5} ry={1.5} fill="#fdba74" opacity="0.4" />
+        </>
+      );
     default:
       return null;
   }
 }
 
-function QuestMarker({ stepIndex, done }: { stepIndex: number; done: boolean }) {
+function QuestMarker({
+  station,
+  stepIndex,
+  done,
+}: {
+  station: StationConfig;
+  stepIndex: number;
+  done: boolean;
+}) {
+  const stepNumber = stepIndex + 1;
+
   return (
     <div className="absolute left-1/2 z-20 flex -top-7 sm:-top-8 -translate-x-1/2 flex-col items-center" aria-hidden>
-      {done ? (
-        <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border-[3px] border-[#1c1917] bg-gradient-to-b from-amber-300 to-amber-500 shadow-[0_4px_0_#1c1917,0_0_14px_rgba(251,191,36,0.7)]">
-          <span className="text-base sm:text-lg">★</span>
-        </div>
-      ) : (
-        <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center">
-          <div className="absolute inset-0 rotate-45 rounded-md border-[3px] border-[#1c1917] bg-gradient-to-br from-violet-200 to-violet-400 shadow-[0_3px_0_#1c1917]" />
-          <span className="relative z-[1] font-black text-sm sm:text-base text-white drop-shadow-[0_1px_0_#1c1917]">
-            {stepIndex + 1}
-          </span>
-        </div>
-      )}
+      <div className="relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center">
+        <div
+          className="absolute inset-0 rotate-45 rounded-md border-[3px] border-[#1c1917]"
+          style={{
+            background: `linear-gradient(135deg, ${station.islandFillTop} 0%, ${station.islandFillBottom} 100%)`,
+            boxShadow: done
+              ? `0 3px 0 #1c1917, 0 0 14px ${station.accentGlow}`
+              : `0 3px 0 #1c1917, 0 0 8px ${station.accentGlow}`,
+          }}
+        />
+        <span className="relative z-[1] font-black text-sm sm:text-base text-white drop-shadow-[0_1px_0_#1c1917]">
+          {stepNumber}
+        </span>
+      </div>
       <div className="h-4 w-1.5 rounded-full bg-gradient-to-b from-[#78350f] to-[#1c1917] border border-[#1c1917]" />
-      {done ? (
-        <div className="h-3 w-5 -mt-0.5 rounded-sm border-2 border-[#1c1917] bg-gradient-to-r from-red-500 to-red-600 shadow-[0_2px_0_#1c1917]" />
-      ) : (
-        <div className="h-3 w-5 -mt-0.5 rounded-sm border-2 border-[#1c1917] bg-gradient-to-r from-rose-400 to-rose-500 shadow-[0_2px_0_#1c1917]" />
-      )}
+      <div
+        className="h-3 w-5 -mt-0.5 rounded-sm border-2 border-[#1c1917] shadow-[0_2px_0_#1c1917]"
+        style={{
+          background: `linear-gradient(to right, ${station.islandFillBottom}, ${station.islandSandDeep})`,
+        }}
+      />
     </div>
   );
 }
@@ -754,7 +799,7 @@ function IslandNode({
       </svg>
 
       <div className="relative w-full">
-        <QuestMarker stepIndex={stepIndex} done={done} />
+        <QuestMarker station={station} stepIndex={stepIndex} done={done} />
 
         <IslandSilhouette station={station} stepIndex={stepIndex} done={done} />
 
@@ -830,7 +875,10 @@ export function ScheduleAdventureMap({
   };
 
   return (
-    <div className="relative h-full min-h-0 w-full flex-1 overflow-hidden">
+    <div
+      className="relative w-full"
+      style={{ minHeight: MAP_SCROLL_MIN_HEIGHT_PX }}
+    >
       <MapAmbience />
       <MapTreasureFrame />
       <AdventureTrails />

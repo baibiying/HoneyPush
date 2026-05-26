@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CalendarDays, Clock, LayoutGrid, X } from "lucide-react";
+import { CalendarDays, Clock, LayoutGrid, Shield, X } from "lucide-react";
 import { ScheduleAdventureMap } from "./schedule-adventure-map";
 
 import type { ScheduleScene } from "./schedule-stations";
@@ -29,6 +29,7 @@ type ScheduleGameHubProps = {
   tasksPanel: ReactNode;
   timePanel: ReactNode;
   schedulePanel: ReactNode;
+  officerPanel: ReactNode;
   scheduleOverlay?: ReactNode;
   scheduleCalendarHidden?: boolean;
 };
@@ -38,7 +39,7 @@ export { STATIONS } from "./schedule-stations";
 
 function MapOceanBackdrop() {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+    <div className="pointer-events-none absolute inset-0 min-h-full overflow-hidden" aria-hidden>
       <div
         className="absolute inset-0 opacity-50"
         style={{
@@ -96,7 +97,9 @@ function GameHud() {
       <p className="mx-auto mt-1.5 max-w-md font-comic text-xs sm:text-sm font-bold leading-snug text-amber-100/90">
         AI 智能排期 + 游戏化监督 · 理清任务、专注执行
       </p>
-      <p className="mt-1 text-[10px] sm:text-xs font-semibold text-white/45">点击岛屿开始冒险</p>
+      <p className="mt-1 text-[10px] sm:text-xs font-semibold text-white/45">
+        点击岛屿开始冒险 · 向下滚动探索地图
+      </p>
     </div>
   );
 }
@@ -111,6 +114,7 @@ export function ScheduleGameHub({
   tasksPanel,
   timePanel,
   schedulePanel,
+  officerPanel,
   scheduleOverlay,
   scheduleCalendarHidden = false,
 }: ScheduleGameHubProps) {
@@ -133,25 +137,29 @@ export function ScheduleGameHub({
 
         <div className="relative z-10 flex flex-1 min-h-0 flex-col overflow-hidden">
           {scene === "map" ? (
-            <div className="relative flex-1 min-h-0 w-full animate-[fadeIn_0.35s_ease-out]">
-              <MapOceanBackdrop />
-              <ScheduleAdventureMap
-                questSteps={questSteps}
-                canEdit={canEdit}
-                onSceneChange={onSceneChange}
-                onOpenAddTask={onOpenAddTask}
-                onRequireLogin={onRequireLogin}
-              />
-
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-2 px-3 pt-2 sm:pt-3">
-                <div className="pointer-events-auto w-full max-w-2xl">
+            <div className="relative flex flex-1 min-h-0 w-full flex-col overflow-hidden animate-[fadeIn_0.35s_ease-out]">
+              <div className="shrink-0 z-20 flex flex-col items-center gap-2 px-3 pt-2 sm:pt-3 pb-2 border-b border-white/10 bg-[#312e81]/80 backdrop-blur-sm">
+                <div className="w-full max-w-2xl">
                   <GameHud />
                 </div>
                 {!canEdit && (
-                  <p className="pointer-events-auto w-full max-w-2xl rounded-lg border-2 border-amber-400/55 bg-amber-500/15 px-3 py-1.5 text-center text-[11px] sm:text-xs font-bold text-amber-100 backdrop-blur-sm shadow-[0_2px_0_#1C1917]">
+                  <p className="w-full max-w-2xl rounded-lg border-2 border-amber-400/55 bg-amber-500/15 px-3 py-1.5 text-center text-[11px] sm:text-xs font-bold text-amber-100 backdrop-blur-sm shadow-[0_2px_0_#1C1917]">
                     🔒 浏览模式 · 登录后可登岛冒险
                   </p>
                 )}
+              </div>
+
+              <div className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth">
+                <div className="relative w-full">
+                  <MapOceanBackdrop />
+                  <ScheduleAdventureMap
+                    questSteps={questSteps}
+                    canEdit={canEdit}
+                    onSceneChange={onSceneChange}
+                    onOpenAddTask={onOpenAddTask}
+                    onRequireLogin={onRequireLogin}
+                  />
+                </div>
               </div>
             </div>
           ) : scene === "tasks" ? (
@@ -180,6 +188,32 @@ export function ScheduleGameHub({
                 {tasksPanel}
               </div>
             </div>
+          ) : scene === "officer" ? (
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-5 md:p-6 animate-[fadeIn_0.3s_ease-out]">
+              <button
+                type="button"
+                onClick={() => onSceneChange("map")}
+                className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-white/95 text-[#1C1917] comic-shadow-sm hover:bg-amber-50"
+                aria-label="返回地图"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="shrink-0 mb-2 sm:mb-3 pr-12">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-gradient-to-br from-orange-500 to-red-700 text-white shadow-[0_3px_0_#7f1d1d]">
+                    <Shield className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="font-bangers text-lg sm:text-2xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917] truncate">
+                      选择监督官
+                    </h2>
+                  </div>
+                </div>
+              </div>
+              <div className={`flex-1 min-h-0 overflow-hidden p-1 sm:p-2 ${FROSTED_PANEL}`}>
+                <div className="h-full min-h-0 overflow-y-auto">{officerPanel}</div>
+              </div>
+            </div>
           ) : scene === "time" ? (
             <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-5 md:p-6 animate-[fadeIn_0.3s_ease-out]">
               <button
@@ -206,7 +240,7 @@ export function ScheduleGameHub({
                 <div className="h-full min-h-0 overflow-y-auto p-3 sm:p-4">{timePanel}</div>
               </div>
             </div>
-          ) : (
+          ) : scene === "calendar" ? (
             <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-5 md:p-6 animate-[fadeIn_0.3s_ease-out]">
               <button
                 type="button"
@@ -243,7 +277,7 @@ export function ScheduleGameHub({
                 {scheduleOverlay}
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

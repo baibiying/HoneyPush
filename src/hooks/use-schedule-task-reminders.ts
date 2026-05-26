@@ -123,7 +123,7 @@ export function useScheduleTaskReminders({
       sentKeysRef.current.add(key);
       notifyBrowser(
         "任务已到开始时间",
-        `「${task.text}」已开始，请选择监督官（将自动开启摄像头监督）`
+        `「${task.text}」已开始，将自动进入监督并开启摄像头`
       );
     }
     saveSentReminderKeys(sentKeysRef.current);

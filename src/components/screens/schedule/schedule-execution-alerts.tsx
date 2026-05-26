@@ -67,7 +67,7 @@ export function ScheduleExecutionAlerts({
               {task.text}
             </p>
             <p className="text-[10px] text-emerald-100/85 mt-0.5">
-              将自动弹出监督官选择；选完后自动开启摄像头，摸鱼时播放监督官视频
+              将自动进入监督视窗并开启摄像头；若未在地图上选定监督官，需先选择一次
             </p>
           </div>
         </div>

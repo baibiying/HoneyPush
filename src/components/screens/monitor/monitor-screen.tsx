@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { OFFICERS } from "@/lib/officers-data";
+import { OFFICERS, type OfficerId } from "@/lib/officers-data";
+import { readPreferredOfficer, setPreferredOfficer } from "@/lib/preferred-officer";
 import {
   EXECUTE_TASK_QUERY,
   clearStashedExecuteTask,
@@ -98,7 +99,7 @@ export function MonitorScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading, promptLogin } = useAuth();
-  const [currentOfficerId, setCurrentOfficerId] = useState("yuri");
+  const [currentOfficerId, setCurrentOfficerId] = useState<OfficerId>("yuri");
   const [focusSeconds, setFocusSeconds] = useState(DEFAULT_FOCUS_SECONDS);
   const [timer, setTimer] = useState(DEFAULT_FOCUS_SECONDS);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -119,6 +120,11 @@ export function MonitorScreen() {
   const crtRef = useRef<CrtMonitorHandle>(null);
   const executeHandledRef = useRef(false);
   const activeOfficer = OFFICERS.find((o) => o.id === currentOfficerId) ?? OFFICERS[0];
+
+  useEffect(() => {
+    const preferred = readPreferredOfficer();
+    if (preferred) setCurrentOfficerId(preferred);
+  }, []);
 
   const pendingScheduledTasks: ScheduledTaskLike[] = tasks
     .filter((task) => !task.checked && task.scheduledStartAt && task.scheduledEndAt)
@@ -147,6 +153,42 @@ export function MonitorScreen() {
     setLogs((prev) => [{ time: getNowStr(), text, type }, ...prev.slice(0, 20)]);
   }, []);
 
+  const launchSupervisionWithOfficer = useCallback(
+    async (officerId: OfficerId, task: { id: number; text: string }) => {
+      setCurrentOfficerId(officerId);
+      setShowOfficerModal(false);
+      const officer = OFFICERS.find((o) => o.id === officerId);
+      const fullTask = tasks.find((item) => item.id === task.id);
+
+      if (!officer) return;
+
+      const minutes = Math.max(
+        15,
+        Math.min(180, Math.round(fullTask?.durationMinutes ?? 25))
+      );
+      const seconds = minutes * 60;
+      setFocusSeconds(seconds);
+      setTimer(seconds);
+      setDistractionCount(0);
+      setTopTaskText(task.text);
+      markSupervisionLaunched(officerId);
+      addLog(`🎯 开始任务：${task.text}（${minutes} 分钟）`, "normal");
+      addLog(`👮 监督官：${officer.name}`, "success");
+      playChime();
+      setTimerRunning(true);
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      try {
+        await crtRef.current?.startCamera();
+        addLog("📹 摄像头已启动，摸鱼时将播放监督官视频", "success");
+      } catch {
+        addLog("请手动点击「开启实景摄像头」以开始监督", "warning");
+      }
+    },
+    [addLog, tasks]
+  );
+
   const openSupervisionForTask = useCallback(
     (task: { id: number; text: string; scheduledStartAt?: string | null }) => {
       if (task.scheduledStartAt) {
@@ -159,9 +201,15 @@ export function MonitorScreen() {
         setSupervisionRun(null);
       }
       setSelectedTask({ id: task.id, text: task.text });
+
+      const preferred = readPreferredOfficer();
+      if (preferred) {
+        void launchSupervisionWithOfficer(preferred, task);
+        return;
+      }
       setShowOfficerModal(true);
     },
-    []
+    [launchSupervisionWithOfficer]
   );
 
   const abortSupervisionRun = useCallback(
@@ -402,9 +450,11 @@ export function MonitorScreen() {
   };
 
   const handleSelectOfficer = (id: string) => {
-    setCurrentOfficerId(id);
+    const officerId = id as OfficerId;
+    setCurrentOfficerId(officerId);
+    setPreferredOfficer(officerId);
     playChime();
-    const officer = OFFICERS.find((o) => o.id === id);
+    const officer = OFFICERS.find((o) => o.id === officerId);
     if (officer) addLog(`切换监督官：${officer.name}`, "normal");
   };
 
@@ -456,38 +506,10 @@ export function MonitorScreen() {
   };
 
   const handleLaunch = async (officerId: string) => {
-    setCurrentOfficerId(officerId);
-    setShowOfficerModal(false);
-    const officer = OFFICERS.find((o) => o.id === officerId);
-    const fullTask = selectedTask
-      ? tasks.find((item) => item.id === selectedTask.id)
-      : undefined;
-
-    if (officer && selectedTask) {
-      const minutes = Math.max(
-        15,
-        Math.min(180, Math.round(fullTask?.durationMinutes ?? 25))
-      );
-      const seconds = minutes * 60;
-      setFocusSeconds(seconds);
-      setTimer(seconds);
-      setDistractionCount(0);
-      setTopTaskText(selectedTask.text);
-      markSupervisionLaunched(officerId);
-      addLog(`🎯 开始任务：${selectedTask.text}（${minutes} 分钟）`, "normal");
-      addLog(`👮 监督官：${officer.name}`, "success");
-      playChime();
-      setTimerRunning(true);
-
-      window.scrollTo({ top: 0, behavior: "smooth" });
-
-      try {
-        await crtRef.current?.startCamera();
-        addLog("📹 摄像头已启动，摸鱼时将播放监督官视频", "success");
-      } catch {
-        addLog("请手动点击「开启实景摄像头」以开始监督", "warning");
-      }
-    }
+    if (!selectedTask) return;
+    const id = officerId as OfficerId;
+    setPreferredOfficer(id);
+    await launchSupervisionWithOfficer(id, selectedTask);
   };
 
   return (
