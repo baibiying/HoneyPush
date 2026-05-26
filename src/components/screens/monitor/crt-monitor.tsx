@@ -10,9 +10,13 @@ import {
   useImperativeHandle,
 } from "react";
 import { motion } from "framer-motion";
-import { getOfficerAlertVideoSrc, OFFICERS } from "@/lib/officers-data";
-import { buildBilibiliPlayerUrl } from "@/lib/bilibili-player";
+import {
+  getOfficerAlertVideoSrc,
+  OFFICER_CLIP_MAX_DURATION_SEC,
+  OFFICERS,
+} from "@/lib/officers-data";
 import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-video";
+import { unlockBrowserAudio } from "@/lib/unlock-browser-audio";
 
 export type CrtMonitorHandle = {
   startCamera: () => Promise<void>;
@@ -23,22 +27,29 @@ interface CrtMonitorProps {
   isDistracted: boolean;
   mockEventText: string;
   officerId?: string;
+  /** 每次摸鱼检测递增，用于重新播放监督官视频 */
+  distractionPlayKey?: number;
   onDistracted?: (reason: string) => void;
   onFaceRestored?: () => void;
   /** 用户主动关闭摄像头或系统收回权限时 */
   onCameraClosedByUser?: () => void;
+  /** 占满监督全屏区域 */
+  fillViewport?: boolean;
 }
 
-const MISSING_FRAMES_THRESHOLD = 3;
+const MISSING_FRAMES_THRESHOLD = 2;
+const RESTORE_FRAMES_THRESHOLD = 4;
 
 export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function CrtMonitor(
   {
     isDistracted,
     mockEventText,
     officerId = "yuri",
+    distractionPlayKey = 0,
     onDistracted,
     onFaceRestored,
     onCameraClosedByUser,
+    fillViewport = false,
   },
   ref
 ) {
@@ -46,7 +57,11 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   const cameraActiveRef = useRef(false);
   const suppressCloseNotifyRef = useRef(false);
   const onCameraClosedByUserRef = useRef(onCameraClosedByUser);
+  const onDistractedRef = useRef(onDistracted);
+  const onFaceRestoredRef = useRef(onFaceRestored);
   onCameraClosedByUserRef.current = onCameraClosedByUser;
+  onDistractedRef.current = onDistracted;
+  onFaceRestoredRef.current = onFaceRestored;
   const [detectionStatus, setDetectionStatus] = useState<
     "idle" | "detecting" | "no-face" | "face-ok" | "loading"
   >("idle");
@@ -56,12 +71,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const missingFramesRef = useRef(0);
+  const restoreFramesRef = useRef(0);
   const alreadyDistractedRef = useRef(false);
   const detectionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const faceApiRef = useRef<typeof import("face-api.js") | null>(null);
 
   const activeOfficer = OFFICERS.find((o) => o.id === officerId) ?? OFFICERS[0];
-  const alertVideoUrl = activeOfficer.alertVideoBvid;
+  const alertClipStart = activeOfficer.alertVideoStartSec ?? 0;
+  const alertClipDuration =
+    activeOfficer.alertVideoDurationSec ?? OFFICER_CLIP_MAX_DURATION_SEC;
 
   const loadFaceApi = useCallback(async () => {
     if (faceApiRef.current) return true;
@@ -95,23 +113,28 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       setFaceCount(count);
       if (count === 0) {
         missingFramesRef.current += 1;
+        restoreFramesRef.current = 0;
         setDetectionStatus("no-face");
         if (missingFramesRef.current >= MISSING_FRAMES_THRESHOLD && !alreadyDistractedRef.current) {
           alreadyDistractedRef.current = true;
-          onDistracted?.("AI 摄像头检测到人脸消失，疑似离座或低头玩手机");
+          onDistractedRef.current?.("AI 摄像头检测到人脸消失，疑似离座或低头玩手机");
         }
       } else {
         missingFramesRef.current = 0;
         setDetectionStatus("face-ok");
         if (alreadyDistractedRef.current) {
-          alreadyDistractedRef.current = false;
-          onFaceRestored?.();
+          restoreFramesRef.current += 1;
+          if (restoreFramesRef.current >= RESTORE_FRAMES_THRESHOLD) {
+            alreadyDistractedRef.current = false;
+            restoreFramesRef.current = 0;
+            onFaceRestoredRef.current?.();
+          }
         }
       }
     } catch {
       /* 静默跳过 */
     }
-  }, [onDistracted, onFaceRestored]);
+  }, []);
 
   const notifyCameraClosedByUser = useCallback(() => {
     onCameraClosedByUserRef.current?.();
@@ -164,6 +187,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      await unlockBrowserAudio();
       cameraActiveRef.current = true;
       setCameraActive(true);
       await loadFaceApi();
@@ -244,11 +268,21 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   return (
     <div
       className={[
-        "relative overflow-hidden bg-stone-900 comic-border comic-shadow-lg",
-        isDistracted ? "border-rose-600 comic-shadow-red" : "border-[#1C1917]",
+        "relative overflow-hidden bg-stone-900",
+        fillViewport
+          ? "flex h-full min-h-0 w-full flex-col rounded-none border-0"
+          : [
+              "comic-border comic-shadow-lg",
+              isDistracted ? "border-rose-600 comic-shadow-red" : "border-[#1C1917]",
+            ].join(" "),
       ].join(" ")}
     >
-      <div className="relative h-64 md:h-80 w-full bg-stone-950">
+      <div
+        className={[
+          "relative w-full bg-stone-950",
+          fillViewport ? "min-h-0 flex-1" : "h-64 md:h-80",
+        ].join(" ")}
+      >
         <video
           ref={videoRef}
           className={[
@@ -328,35 +362,26 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           />
         </div>
 
-        {isDistracted && (
+        {isDistracted && cameraActive && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute inset-0 flex flex-col"
-            style={{ zIndex: 50 }}
+            className="absolute inset-0 z-50 bg-black"
           >
-            {activeOfficer.alertVideoDurationSec != null ? (
+            <div className="absolute inset-0 bottom-10">
               <OfficerClipVideo
-                key={`${officerId}-clip-${alertVideoUrl}`}
-                className="flex-1 w-full min-h-0 object-contain bg-black"
+                key={`${officerId}-alert-${distractionPlayKey}`}
+                className="h-full w-full object-contain bg-black"
                 src={getOfficerAlertVideoSrc(activeOfficer)}
-                startSec={activeOfficer.alertVideoStartSec ?? 0}
-                durationSec={activeOfficer.alertVideoDurationSec}
+                startSec={alertClipStart}
+                durationSec={alertClipDuration}
                 autoPlay
+                loop={false}
                 controls={false}
+                showClipControls={false}
               />
-            ) : (
-              <iframe
-                key={`${officerId}-${alertVideoUrl}`}
-                title={`${activeOfficer.name} 监督视频`}
-                className="flex-1 w-full"
-                src={buildBilibiliPlayerUrl(alertVideoUrl, { autoplay: true })}
-                style={{ border: "none" }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
-                allowFullScreen
-              />
-            )}
-            <div className="bg-black/90 px-3 py-1.5 flex items-center justify-center gap-2 shrink-0">
+            </div>
+            <div className="absolute inset-x-0 bottom-0 z-10 bg-black/90 px-3 py-1.5 flex items-center justify-center gap-2">
               <span className="bg-rose-600 text-white font-bangers text-xs px-2 py-0.5 tracking-widest animate-pulse">
                 {activeOfficer.name} · 抓包中！
               </span>
@@ -387,7 +412,12 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         </div>
       </div>
 
-      <div className="bg-stone-900 p-3 flex gap-2 items-center border-t-4 border-[#1C1917]">
+      <div
+        className={[
+          "bg-stone-900 flex shrink-0 gap-2 items-center border-t-4 border-[#1C1917]",
+          fillViewport ? "p-2 sm:p-3" : "p-3",
+        ].join(" ")}
+      >
         <button
           type="button"
           onClick={() => void toggleCamera()}

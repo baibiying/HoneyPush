@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { OFFICER_CLIP_MAX_DURATION_SEC } from "@/lib/officers-data";
+import { unlockBrowserAudio } from "@/lib/unlock-browser-audio";
 
 type OfficerClipVideoProps = {
   src: string;
@@ -11,9 +12,12 @@ type OfficerClipVideoProps = {
   durationSec?: number;
   loop?: boolean;
   autoPlay?: boolean;
+  muted?: boolean;
   /** 仅对「非片段」模式生效；片段模式使用自定义控制条 */
   controls?: boolean;
   className?: string;
+  /** 片段模式是否显示底部控制条（监督警报全屏时不显示） */
+  showClipControls?: boolean;
   onError?: () => void;
 };
 
@@ -30,8 +34,10 @@ export function OfficerClipVideo({
   durationSec,
   loop = false,
   autoPlay = false,
+  muted = false,
   controls = true,
   className = "",
+  showClipControls = true,
   onError,
 }: OfficerClipVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -116,12 +122,34 @@ export function OfficerClipVideo({
   const handlePauseEvent = () => setPlaying(false);
 
   useEffect(() => {
-    if (!isClipped || !autoPlay) return;
+    if (!autoPlay) return;
     const el = videoRef.current;
     if (!el) return;
+    el.muted = muted;
+    el.volume = muted ? 0 : 1;
     seekToStart();
-    void el.play().catch(() => {});
-  }, [autoPlay, isClipped, seekToStart, src]);
+    const tryPlay = async () => {
+      try {
+        await el.play();
+      } catch {
+        if (!muted) {
+          await unlockBrowserAudio();
+          el.muted = false;
+          el.volume = 1;
+          try {
+            await el.play();
+          } catch {
+            /* 浏览器仍阻止带声自动播放 */
+          }
+        }
+      }
+    };
+    void tryPlay();
+    if (el.readyState < 2) {
+      el.addEventListener("loadeddata", tryPlay, { once: true });
+      return () => el.removeEventListener("loadeddata", tryPlay);
+    }
+  }, [autoPlay, isClipped, muted, seekToStart, src]);
 
   useEffect(() => {
     if (!isClipped) return;
@@ -134,7 +162,7 @@ export function OfficerClipVideo({
   }, [clampToClip, isClipped]);
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full min-h-0">
       <video
         ref={videoRef}
         className={className}
@@ -142,6 +170,7 @@ export function OfficerClipVideo({
         controls={isClipped ? false : controls}
         controlsList={isClipped ? "nodownload noplaybackrate" : undefined}
         playsInline
+        muted={muted}
         autoPlay={isClipped ? false : autoPlay}
         preload="metadata"
         onLoadedData={handleLoadedData}
@@ -154,7 +183,7 @@ export function OfficerClipVideo({
         onError={onError}
       />
 
-      {isClipped && clipDurationSec != null && (
+      {isClipped && clipDurationSec != null && showClipControls && (
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-3 pb-2 pt-8">
           <input
             type="range"

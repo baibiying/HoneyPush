@@ -37,7 +37,7 @@ export const STATIONS: StationConfig[] = [
     shore: "from-amber-100 to-amber-300",
     decor: "🌴",
     islandPath:
-      "M 11 51 C 1 34, 5 12, 30 5 C 54 1, 86 11, 92 35 C 97 58, 79 85, 49 89 C 22 91, 7 72, 9 61, 11 51 Z",
+      "M 11 51 C 1 34, 5 12, 30 5 C 54 1, 86 11, 92 35 C 97 58, 79 85, 49 89 C 30 91, 7 72, 11 51 Z",
     islandFillTop: "#4ade80",
     islandFillBottom: "#14532d",
     islandSand: "#fde68a",
@@ -113,7 +113,7 @@ export const STATIONS: StationConfig[] = [
     shore: "from-orange-100 to-red-200",
     decor: "👮",
     islandPath:
-      "M 8 38 C 4 18, 28 4, 52 6 C 78 8, 94 28, 92 52 C 90 76, 68 90, 42 88 C 18 86, 6 62, 7 50, 8 38 Z",
+      "M 8 38 C 4 18, 28 4, 52 6 C 78 8, 94 28, 92 52 C 90 76, 68 90, 42 88 C 18 86, 7 50, 8 38 Z",
     islandFillTop: "#fb923c",
     islandFillBottom: "#7f1d1d",
     islandSand: "#fed7aa",

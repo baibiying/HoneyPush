@@ -5,8 +5,6 @@ import { OFFICERS, type OfficerId } from "@/lib/officers-data";
 import { readPreferredOfficer, setPreferredOfficer } from "@/lib/preferred-officer";
 import { clearStashedExecuteTask, readStashedExecuteTaskId } from "@/lib/execute-task-flow";
 import { CrtMonitor, type CrtMonitorHandle } from "./crt-monitor";
-import { OfficerBubble } from "./officer-bubble";
-import { AtomicClock } from "./atomic-clock";
 import { memory } from "@eazo/sdk";
 import { OfficerSelectModal } from "./officer-select-modal";
 import { request } from "@/lib/api/request";
@@ -101,6 +99,7 @@ export function MonitorScreen() {
   const [isDistracted, setIsDistracted] = useState(false);
   const [mockEventText, setMockEventText] = useState("一切正常");
   const [distractionCount, setDistractionCount] = useState(0);
+  const [distractionPlayKey, setDistractionPlayKey] = useState(0);
   const [topTaskText, setTopTaskText] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([
@@ -116,6 +115,7 @@ export function MonitorScreen() {
   const takeoverRootRef = useRef<HTMLDivElement>(null);
   const executeHandledRef = useRef(false);
   const abortingSupervisionRef = useRef(false);
+  const distractionUntilRef = useRef(0);
   const activeOfficer = OFFICERS.find((o) => o.id === currentOfficerId) ?? OFFICERS[0];
 
   useEffect(() => {
@@ -167,6 +167,8 @@ export function MonitorScreen() {
       setFocusSeconds(seconds);
       setTimer(seconds);
       setDistractionCount(0);
+      setDistractionPlayKey(0);
+      setIsDistracted(false);
       setTopTaskText(task.text);
       markSupervisionLaunched(officerId);
       addLog(`🎯 开始任务：${task.text}（${minutes} 分钟）`, "normal");
@@ -249,6 +251,7 @@ export function MonitorScreen() {
         setTimerRunning(false);
         setTimer(focusSeconds);
         setDistractionCount(0);
+        setDistractionPlayKey(0);
         setIsDistracted(false);
         setMockEventText("一切正常");
         exitSupervisionTakeover();
@@ -271,6 +274,7 @@ export function MonitorScreen() {
   const handleCameraClosedByUser = useCallback(() => {
     const run = readSupervisionRun();
     if (!run?.launched) return;
+    setIsDistracted(false);
     void abortSupervisionRun("关闭摄像头");
   }, [abortSupervisionRun]);
 
@@ -430,54 +434,18 @@ export function MonitorScreen() {
     persistCompletedSession,
   ]);
 
-  const handleToggle = () => {
-    playChime();
-    setTimerRunning((r) => {
-      if (!r) addLog("开始新的专注冲刺", "normal");
-      else addLog("暂停专注", "normal");
-      return !r;
-    });
-  };
-
-  const handleReset = () => {
-    const run = readSupervisionRun();
-    if (run?.launched && timerRunning) {
-      const confirmed = window.confirm(
-        "确定要结束当前监督吗？这将记为本次任务执行失败。"
-      );
-      if (!confirmed) return;
-      void abortSupervisionRun("手动结束监督");
-      return;
-    }
-
-    setTimer(focusSeconds);
-    setTimerRunning(false);
-    playBeep();
-    addLog("计时器已重置", "normal");
-  };
-
-  const triggerMockDistraction = () => {
-    setIsDistracted(true);
-    setMockEventText("‼ 警告：AI 检测到用户拿起手机 (玩微信中...)");
-    setDistractionCount((c) => c + 1);
-    playBeep();
-    addLog(`检测到摸鱼！${activeOfficer.name}鸣枪空袭警报`, "warning");
-  };
-
-  const triggerMockAway = () => {
-    setIsDistracted(true);
-    setMockEventText("‼ 警告：AI 探测空座 (离开位置摸鱼中...)");
-    setDistractionCount((c) => c + 1);
-    playBeep();
-    addLog("检测到离座！持续12秒", "warning");
-  };
-
-  const resolveDistraction = () => {
-    setIsDistracted(false);
-    setMockEventText("已回归桌前");
-    playChime();
-    addLog("已解除警报，恢复专注", "success");
-  };
+  const reportDistraction = useCallback(
+    (reason: string, logText?: string) => {
+      distractionUntilRef.current = Date.now() + 8_000;
+      setIsDistracted(true);
+      setDistractionPlayKey((k) => k + 1);
+      setMockEventText(reason);
+      setDistractionCount((c) => c + 1);
+      playBeep();
+      addLog(logText ?? `检测到摸鱼！${activeOfficer.name} 监督视频已触发`, "warning");
+    },
+    [activeOfficer.name, addLog]
+  );
 
   const handleLaunch = async (officerId: string) => {
     if (!selectedTask) return;
@@ -492,20 +460,19 @@ export function MonitorScreen() {
       isDistracted={isDistracted}
       mockEventText={mockEventText}
       officerId={currentOfficerId}
+      distractionPlayKey={distractionPlayKey}
       onDistracted={(reason) => {
-        setIsDistracted(true);
-        setMockEventText(`AI 摄像头检测：${reason}`);
-        setDistractionCount((c) => c + 1);
-        playBeep();
-        addLog(`摄像头检测到摸鱼！${activeOfficer.name}鸣枪警报`, "warning");
+        reportDistraction(`AI 摄像头检测：${reason}`);
       }}
       onFaceRestored={() => {
+        if (Date.now() < distractionUntilRef.current) return;
         setIsDistracted(false);
         setMockEventText("人脸已重新检测到，恢复专注");
         playChime();
         addLog("人脸重新出现，已解除警报", "success");
       }}
       onCameraClosedByUser={handleCameraClosedByUser}
+      fillViewport
     />
   );
 
@@ -519,42 +486,11 @@ export function MonitorScreen() {
   );
 
   return (
-    <div
-      ref={takeoverRootRef}
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-[#1e1b4b] via-[#312e81] to-[#1e1b4b]"
-    >
-      <header className="shrink-0 border-b-2 border-white/15 px-4 py-3 text-center sm:px-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/80">
-          任务监督
-        </p>
-        <h2 className="mt-1 font-bangers text-xl sm:text-2xl text-white drop-shadow-[0_2px_0_#1C1917] line-clamp-2">
-          {topTaskText || selectedTask?.text || "专注中"}
-        </h2>
-        <p className="mt-1 text-xs font-bold text-amber-100/80">
-          监督官：{activeOfficer.name}
-        </p>
-      </header>
-
-      <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 overflow-y-auto px-3 py-4 sm:gap-5 sm:px-6 sm:py-5 w-full max-w-3xl mx-auto">
-        <div className="w-full">{crtMonitor}</div>
-        <OfficerBubble
-          officer={activeOfficer}
-          isDistracted={isDistracted}
-          timerRunning={timerRunning}
-        />
-        <AtomicClock
-          timer={timer}
-          timerRunning={timerRunning}
-          topTaskText={topTaskText}
-          onToggle={handleToggle}
-          onReset={handleReset}
-          onMockDistraction={triggerMockDistraction}
-          onMockAway={triggerMockAway}
-          onResolve={resolveDistraction}
-        />
+    <>
+      <div ref={takeoverRootRef} className="h-full w-full min-h-0 bg-stone-950">
+        {crtMonitor}
       </div>
-
       {officerSelectModal}
-    </div>
+    </>
   );
 }

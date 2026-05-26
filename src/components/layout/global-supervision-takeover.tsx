@@ -29,7 +29,7 @@ export function GlobalSupervisionTakeover() {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex min-h-svh flex-col overflow-hidden bg-[#1e1b4b] comic-bg-pattern"
+      className="fixed inset-0 z-[9999] flex min-h-svh flex-col overflow-hidden bg-stone-950"
       role="dialog"
       aria-modal="true"
       aria-label="任务监督视窗"

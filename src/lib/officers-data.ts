@@ -46,6 +46,9 @@ export const OFFICERS: Officer[] = [
     alertVideoBvid: "BV1SwGz6tEkR",
     previewVideoBvid: "BV1SwGz6tEkR",
     previewVideoStartSec: 0,
+    previewVideoDurationSec: OFFICER_CLIP_MAX_DURATION_SEC,
+    alertVideoStartSec: 0,
+    alertVideoDurationSec: OFFICER_CLIP_MAX_DURATION_SEC,
     quotes: {
       idle: "做得很优秀，列兵！继续保持高昂的专注状态！",
       working: "时间正在一秒秒蒸发！全神贯注！不可懈怠！",
