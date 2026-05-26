@@ -22,6 +22,7 @@ const HOUR_END = 24;
 const RANGE_START_MIN = HOUR_START * 60;
 const RANGE_END_MIN = HOUR_END * 60;
 const RANGE_TOTAL_MIN = RANGE_END_MIN - RANGE_START_MIN;
+const SNAP_MINUTES = 5;
 const MIN_SLOT_MINUTES = 15;
 const DEFAULT_SLOT_MINUTES = 60;
 const TIMELINE_HOURS = Array.from(
@@ -57,7 +58,7 @@ function timeToMinutes(time: string) {
 }
 
 function snapMinutes(minutes: number) {
-  return Math.round(minutes / 15) * 15;
+  return Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
 }
 
 function clampMinutes(minutes: number) {
