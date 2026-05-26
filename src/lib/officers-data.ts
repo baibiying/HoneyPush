@@ -1,4 +1,14 @@
+import type { DistractionLevel } from "@/lib/face-tracking/types";
+
 export type OfficerId = "yuri" | "gu" | "lin";
+export type OfficerAlertLevel = DistractionLevel;
+
+export interface OfficerAlertClip {
+  bvid: string;
+  startSec: number;
+  durationSec: number;
+  label: string;
+}
 
 /**
  * 监督官配置（修改卡片与视频对应关系时改这里）：
@@ -8,6 +18,7 @@ export type OfficerId = "yuri" | "gu" | "lin";
  * | title | 卡片立绘下称号、弹窗标题旁说明 |
  * | slogan | 卡片台词气泡 |
  * | alertVideoBvid / previewVideoBvid | B 站 BV，试看与摸鱼警报 |
+ * | alertClips[1-4] | 摸鱼分级视频（轻提醒 / 抓包 / 严惩 / 身份异常） |
  * | *VideoStartSec / *VideoDurationSec | 只播片段（最长 OFFICER_CLIP_MAX_DURATION_SEC） |
  *
  * 第二位、第三位建议：文案气质与 BV 内容一致（严厉督促 vs 安静陪读）。
@@ -28,6 +39,8 @@ export interface Officer {
   previewVideoDurationSec?: number;
   alertVideoStartSec?: number;
   alertVideoDurationSec?: number;
+  /** 未配置时由 alertVideoBvid 自动生成 1～4 级片段 */
+  alertClips?: Partial<Record<OfficerAlertLevel, OfficerAlertClip>>;
   quotes: {
     idle: string;
     working: string;
@@ -111,4 +124,59 @@ export function getOfficerPreviewVideoSrc(officer: Officer): string {
 
 export function getOfficerAlertVideoSrc(officer: Officer): string {
   return `/api/officer-preview-video?bvid=${encodeURIComponent(officer.alertVideoBvid)}`;
+}
+
+function defaultAlertClips(officer: Officer): Record<OfficerAlertLevel, OfficerAlertClip> {
+  const bvid = officer.alertVideoBvid;
+  const l2Start = officer.alertVideoStartSec ?? 0;
+  const l2Dur = officer.alertVideoDurationSec ?? OFFICER_CLIP_MAX_DURATION_SEC;
+  return {
+    1: { bvid, startSec: l2Start, durationSec: 8, label: "轻提醒" },
+    2: { bvid, startSec: l2Start, durationSec: l2Dur, label: "抓包" },
+    3: { bvid, startSec: l2Start + 8, durationSec: 25, label: "严惩" },
+    4: { bvid, startSec: l2Start, durationSec: 12, label: "身份异常" },
+  };
+}
+
+/** 未摸鱼时主画面循环播放的陪伴/督促片段 */
+export function getOfficerFocusClip(
+  officer: Officer
+): OfficerAlertClip & { src: string } {
+  const bvid = getOfficerPreviewBvid(officer);
+  const startSec = officer.previewVideoStartSec ?? 0;
+  const durationSec = officer.previewVideoDurationSec ?? OFFICER_CLIP_MAX_DURATION_SEC;
+  return {
+    bvid,
+    startSec,
+    durationSec,
+    label: "专注陪伴",
+    src: getOfficerPreviewVideoSrc(officer),
+  };
+}
+
+export function getOfficerAlertClip(
+  officer: Officer,
+  level: OfficerAlertLevel
+): OfficerAlertClip & { src: string } {
+  const base = defaultAlertClips(officer);
+  const clip = { ...base[level], ...officer.alertClips?.[level] };
+  return {
+    ...clip,
+    src: `/api/officer-preview-video?bvid=${encodeURIComponent(clip.bvid)}`,
+  };
+}
+
+export function getLevelBannerLabel(level: OfficerAlertLevel): string {
+  switch (level) {
+    case 1:
+      return "轻提醒";
+    case 2:
+      return "抓包中！";
+    case 3:
+      return "严重离座！";
+    case 4:
+      return "身份异常";
+    default:
+      return "抓包中！";
+  }
 }

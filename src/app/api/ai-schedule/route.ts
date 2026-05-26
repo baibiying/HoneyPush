@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@eazo/sdk";
 import {
   buildFallbackScheduleFromTasks,
   type AiScheduleItem,
@@ -8,14 +7,14 @@ import {
   parseAvailabilityFromBody,
   parseTimezoneOffsetMinutes,
 } from "@/lib/ai/availability";
+import {
+  extractJsonObject,
+  isLlmConfigured,
+  llmChatCompletion,
+} from "@/lib/ai/llm-chat";
 import { rankTasksForSchedule } from "@/lib/ai/schedule-priority";
 import { assignScheduleTimes } from "@/lib/ai/schedule-times";
 import { requireUser } from "@/lib/auth/session";
-
-const privateKey = process.env.EAZO_PRIVATE_KEY;
-if (privateKey) {
-  ai.configure({ privateKey });
-}
 
 const VALID_CATEGORIES = new Set([
   "import-urgent",
@@ -222,7 +221,7 @@ export async function POST(req: NextRequest) {
     return { schedule, unscheduledIds };
   };
 
-  if (!privateKey) {
+  if (!isLlmConfigured()) {
     const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(
       sourceTasks,
       availability,
@@ -238,17 +237,11 @@ export async function POST(req: NextRequest) {
   );
 
   try {
-    const completion = await ai.chat({
-      model: "deepseek.v3.1",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPayload },
-      ],
-    });
-
-    const rawText = completion.choices[0].message.content ?? "{}";
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { schedule: [] };
+    const rawText = await llmChatCompletion([
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userPayload },
+    ]);
+    const parsed = extractJsonObject(rawText) as { schedule?: unknown };
     const { schedule, unscheduledIds } = runSchedule(parsed);
 
     return buildResponse(schedule, unscheduledIds, "ai");

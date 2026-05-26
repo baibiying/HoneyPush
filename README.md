@@ -32,9 +32,13 @@ cp .env.example .env
 
 | Variable | Description |
 |---|---|
-| `EAZO_PRIVATE_KEY` | Your Eazo developer private key (hex, 64 chars). Used server-side to decrypt the user session token. |
+| `DATABASE_URL` | PostgreSQL connection string (required for tasks and auth). |
+| `LLM_API_KEY` | API key for AI task parsing and scheduling (OpenAI-compatible). Without it, rule-based fallback is used. |
+| `LLM_BASE_URL` | Optional. Defaults to `https://api.openai.com/v1`. Use provider base URL (e.g. DeepSeek `https://api.deepseek.com/v1`). |
+| `LLM_MODEL` | Optional. Defaults to `gpt-4o-mini`. |
+| `EAZO_PRIVATE_KEY` | Optional. Eazo session decryption when embedded in the Eazo app. |
 
-You can generate a keypair in the Eazo developer settings. Never expose the private key to the browser.
+`OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are accepted as aliases for the LLM settings. Never expose API keys to the browser.
 
 ## Learn More
 

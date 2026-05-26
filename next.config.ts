@@ -4,7 +4,11 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  transpilePackages: ["@eazo/sdk"],
+  transpilePackages: [
+    "@eazo/sdk",
+    "@tensorflow-models/coco-ssd",
+    "@tensorflow/tfjs",
+  ],
   allowedDevOrigins: [
     "localhost",
     "127.0.0.1",
@@ -40,7 +44,7 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https:",

@@ -29,10 +29,17 @@ function OfficerCharacterCard({
   onPick: () => void;
 }) {
   return (
-    <motion.button
-      type="button"
-      onClick={onPick}
-      disabled={disabled}
+    <motion.div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : onPick}
+      onKeyDown={(e) => {
+        if (disabled) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPick();
+        }
+      }}
       whileHover={disabled ? undefined : { y: -6, scale: 1.02 }}
       whileTap={disabled ? undefined : { scale: 0.97 }}
       className={[
@@ -40,6 +47,7 @@ function OfficerCharacterCard({
         disabled ? "cursor-not-allowed opacity-80" : "cursor-pointer",
       ].join(" ")}
       aria-pressed={isSelected}
+      aria-disabled={disabled}
       aria-label={`选择监督官 ${officer.name}`}
     >
       <div
@@ -139,7 +147,7 @@ function OfficerCharacterCard({
           </div>
         </div>
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
 

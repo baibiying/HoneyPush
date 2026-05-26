@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { OFFICERS, type OfficerId } from "@/lib/officers-data";
+import { ENROLLMENT_TIMEOUT_MINUTES } from "@/lib/face-tracking/config";
+import type { DistractionEvent, DistractionLevel } from "@/lib/face-tracking/types";
 import { readPreferredOfficer, setPreferredOfficer } from "@/lib/preferred-officer";
 import { clearStashedExecuteTask, readStashedExecuteTaskId } from "@/lib/execute-task-flow";
 import { CrtMonitor, type CrtMonitorHandle } from "./crt-monitor";
@@ -97,9 +99,11 @@ export function MonitorScreen() {
   const [timer, setTimer] = useState(DEFAULT_FOCUS_SECONDS);
   const [timerRunning, setTimerRunning] = useState(false);
   const [isDistracted, setIsDistracted] = useState(false);
+  const [distractionLevel, setDistractionLevel] = useState<DistractionLevel>(1);
   const [mockEventText, setMockEventText] = useState("一切正常");
   const [distractionCount, setDistractionCount] = useState(0);
   const [distractionPlayKey, setDistractionPlayKey] = useState(0);
+  const [focusPlayKey, setFocusPlayKey] = useState(0);
   const [topTaskText, setTopTaskText] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([
@@ -115,7 +119,7 @@ export function MonitorScreen() {
   const takeoverRootRef = useRef<HTMLDivElement>(null);
   const executeHandledRef = useRef(false);
   const abortingSupervisionRef = useRef(false);
-  const distractionUntilRef = useRef(0);
+  const distractionCountedRef = useRef(false);
   const activeOfficer = OFFICERS.find((o) => o.id === currentOfficerId) ?? OFFICERS[0];
 
   useEffect(() => {
@@ -168,7 +172,9 @@ export function MonitorScreen() {
       setTimer(seconds);
       setDistractionCount(0);
       setDistractionPlayKey(0);
+      setDistractionLevel(1);
       setIsDistracted(false);
+      distractionCountedRef.current = false;
       setTopTaskText(task.text);
       markSupervisionLaunched(officerId);
       addLog(`🎯 开始任务：${task.text}（${minutes} 分钟）`, "normal");
@@ -186,7 +192,10 @@ export function MonitorScreen() {
         });
         try {
           await crtRef.current?.startCamera();
-          addLog("📹 摄像头已启动，摸鱼时将播放监督官视频", "success");
+          addLog(
+            "📹 摄像头已启动：请调整角度，确保画面包含脸部、双手与桌面",
+            "success"
+          );
         } catch {
           if (attempt < 2) {
             window.setTimeout(() => void startCameraWithRetry(attempt + 1), 400);
@@ -276,6 +285,12 @@ export function MonitorScreen() {
     if (!run?.launched) return;
     setIsDistracted(false);
     void abortSupervisionRun("关闭摄像头");
+  }, [abortSupervisionRun]);
+
+  const handleEnrollmentTimeout = useCallback(() => {
+    void abortSupervisionRun(
+      `人脸采集超时（${ENROLLMENT_TIMEOUT_MINUTES} 分钟未完成）`
+    );
   }, [abortSupervisionRun]);
 
   const handleSupervisionModalClose = useCallback(() => {
@@ -435,14 +450,30 @@ export function MonitorScreen() {
   ]);
 
   const reportDistraction = useCallback(
-    (reason: string, logText?: string) => {
-      distractionUntilRef.current = Date.now() + 8_000;
+    (event: DistractionEvent) => {
       setIsDistracted(true);
+      setDistractionLevel(event.level);
       setDistractionPlayKey((k) => k + 1);
-      setMockEventText(reason);
-      setDistractionCount((c) => c + 1);
-      playBeep();
-      addLog(logText ?? `检测到摸鱼！${activeOfficer.name} 监督视频已触发`, "warning");
+      setMockEventText(event.reason);
+
+      if (event.level >= 2 && !distractionCountedRef.current) {
+        distractionCountedRef.current = true;
+        setDistractionCount((c) => c + 1);
+      }
+
+      if (event.level === 1) {
+        playChime();
+        addLog(`轻微走神：${event.reason}`, "normal");
+      } else {
+        playBeep();
+        const levelLabel =
+          event.level === 4
+            ? "身份异常"
+            : event.level === 3
+              ? "严重离座"
+              : "摸鱼抓包";
+        addLog(`${levelLabel} · ${activeOfficer.name} 监督视频已触发`, "warning");
+      }
     },
     [activeOfficer.name, addLog]
   );
@@ -458,20 +489,23 @@ export function MonitorScreen() {
     <CrtMonitor
       ref={crtRef}
       isDistracted={isDistracted}
+      distractionLevel={distractionLevel}
       mockEventText={mockEventText}
       officerId={currentOfficerId}
       distractionPlayKey={distractionPlayKey}
-      onDistracted={(reason) => {
-        reportDistraction(`AI 摄像头检测：${reason}`);
-      }}
+      focusPlayKey={focusPlayKey}
+      onDistracted={reportDistraction}
       onFaceRestored={() => {
-        if (Date.now() < distractionUntilRef.current) return;
         setIsDistracted(false);
-        setMockEventText("人脸已重新检测到，恢复专注");
+        setDistractionLevel(1);
+        distractionCountedRef.current = false;
+        setFocusPlayKey((k) => k + 1);
+        setMockEventText("已恢复劳动，继续专注");
         playChime();
-        addLog("人脸重新出现，已解除警报", "success");
+        addLog("恢复劳动，监督官切回正常督促", "success");
       }}
       onCameraClosedByUser={handleCameraClosedByUser}
+      onEnrollmentTimeout={handleEnrollmentTimeout}
       fillViewport
     />
   );

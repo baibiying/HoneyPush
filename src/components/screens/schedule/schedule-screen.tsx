@@ -392,6 +392,50 @@ export function ScheduleScreen() {
     }
   };
 
+  const handleAddTasksBatch = async (
+    payloads: Array<{
+      text: string;
+      category: string;
+      durationMinutes: number;
+      deadline: string;
+    }>
+  ) => {
+    if (!canEdit) {
+      promptLogin("登录后才能创建并保存任务。");
+      return;
+    }
+    if (payloads.length === 0) return;
+
+    setAddingTask(true);
+    try {
+      const created: ScheduleTask[] = [];
+      for (const payload of payloads) {
+        created.push(
+          await createTask({
+            text: payload.text,
+            category: payload.category,
+            durationMinutes: payload.durationMinutes,
+            deadline: payload.deadline,
+          })
+        );
+      }
+      setTasks((prev) => [...created.reverse(), ...prev]);
+      setAddTaskOpen(false);
+      playChime();
+      memory.reportAction({
+        content: `用户通过 AI 一次添加 ${created.length} 个任务`,
+        event_type: "create",
+        page: "schedule",
+        metadata: { type: "add_tasks_ai_batch", count: created.length },
+      }).catch(() => {});
+    } catch (err) {
+      if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
+      alert(err instanceof Error ? err.message : "批量添加失败，请重试");
+    } finally {
+      setAddingTask(false);
+    }
+  };
+
   const updateTaskById = useCallback(
     async (
       id: number,
@@ -751,6 +795,7 @@ export function ScheduleScreen() {
         saving={addingTask}
         onOpenChange={setAddTaskOpen}
         onSubmit={handleAddTaskSubmit}
+        onSubmitBatch={handleAddTasksBatch}
       />
 
       <TaskEditDialog
