@@ -1,22 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { OFFICERS, type OfficerId } from "@/lib/officers-data";
 import { readPreferredOfficer, setPreferredOfficer } from "@/lib/preferred-officer";
-import {
-  EXECUTE_TASK_QUERY,
-  clearStashedExecuteTask,
-  readStashedExecuteTaskId,
-} from "@/lib/execute-task-flow";
-import { OfficerSelector } from "./officer-selector";
+import { clearStashedExecuteTask, readStashedExecuteTaskId } from "@/lib/execute-task-flow";
 import { CrtMonitor, type CrtMonitorHandle } from "./crt-monitor";
 import { OfficerBubble } from "./officer-bubble";
 import { AtomicClock } from "./atomic-clock";
-import { BlackBoxLogs } from "./black-box-logs";
 import { memory } from "@eazo/sdk";
-import { QuickDispatch } from "./quick-dispatch";
-import { TodoList } from "./todo-list";
 import { OfficerSelectModal } from "./officer-select-modal";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -34,6 +25,11 @@ import {
   setSupervisionRun,
   startSupervisionRun,
 } from "@/lib/supervision-run";
+import { exitSupervisionTakeover, readSupervisionTakeover } from "@/lib/supervision-takeover";
+import {
+  exitSupervisionFullscreen,
+  requestSupervisionFullscreen,
+} from "@/lib/supervision-fullscreen";
 
 type LogEntry = { time: string; text: string; type: "normal" | "warning" | "success" };
 type Task = {
@@ -95,10 +91,9 @@ function playChime() {
   } catch { /* ignore */ }
 }
 
+/** 仅由全站监督叠层挂载；任务到点自动弹出 */
 export function MonitorScreen() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { user, loading: authLoading, promptLogin } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [currentOfficerId, setCurrentOfficerId] = useState<OfficerId>("yuri");
   const [focusSeconds, setFocusSeconds] = useState(DEFAULT_FOCUS_SECONDS);
   const [timer, setTimer] = useState(DEFAULT_FOCUS_SECONDS);
@@ -118,7 +113,9 @@ export function MonitorScreen() {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const crtRef = useRef<CrtMonitorHandle>(null);
+  const takeoverRootRef = useRef<HTMLDivElement>(null);
   const executeHandledRef = useRef(false);
+  const abortingSupervisionRef = useRef(false);
   const activeOfficer = OFFICERS.find((o) => o.id === currentOfficerId) ?? OFFICERS[0];
 
   useEffect(() => {
@@ -179,12 +176,24 @@ export function MonitorScreen() {
 
       window.scrollTo({ top: 0, behavior: "smooth" });
 
-      try {
-        await crtRef.current?.startCamera();
-        addLog("📹 摄像头已启动，摸鱼时将播放监督官视频", "success");
-      } catch {
-        addLog("请手动点击「开启实景摄像头」以开始监督", "warning");
-      }
+      void requestSupervisionFullscreen(takeoverRootRef.current);
+
+      const startCameraWithRetry = async (attempt = 0) => {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        try {
+          await crtRef.current?.startCamera();
+          addLog("📹 摄像头已启动，摸鱼时将播放监督官视频", "success");
+        } catch {
+          if (attempt < 2) {
+            window.setTimeout(() => void startCameraWithRetry(attempt + 1), 400);
+            return;
+          }
+          addLog("请手动点击「开启实景摄像头」以开始监督", "warning");
+        }
+      };
+      void startCameraWithRetry();
     },
     [addLog, tasks]
   );
@@ -216,40 +225,54 @@ export function MonitorScreen() {
     async (reason: string) => {
       const run = readSupervisionRun();
       if (!run) return false;
-
-      const officerId = run.officerId ?? currentOfficerId;
-      const ok = await recordTaskExecutionFailure({
-        taskId: run.taskId,
-        officerId,
-        distractionCount,
-        durationMinutes: Math.max(1, Math.round(focusSeconds / 60)),
-      });
+      if (abortingSupervisionRef.current) return false;
+      abortingSupervisionRef.current = true;
 
       try {
-        crtRef.current?.stopCamera();
-      } catch {
-        /* ignore */
-      }
+        const officerId = run.officerId ?? currentOfficerId;
+        const ok = await recordTaskExecutionFailure({
+          taskId: run.taskId,
+          officerId,
+          distractionCount,
+          durationMinutes: Math.max(1, Math.round(focusSeconds / 60)),
+        });
 
-      setSupervisionRun(null);
-      setShowOfficerModal(false);
-      setSelectedTask(null);
-      setTimerRunning(false);
-      setTimer(focusSeconds);
-      setDistractionCount(0);
-      setIsDistracted(false);
-      setMockEventText("一切正常");
-      addLog(
-        ok
-          ? `任务执行失败已记录：${run.taskText}（${reason}）`
-          : `任务执行失败记录未保存：${run.taskText}`,
-        ok ? "warning" : "normal"
-      );
-      playBeep();
-      return ok;
+        try {
+          crtRef.current?.stopCamera();
+        } catch {
+          /* ignore */
+        }
+
+        setSupervisionRun(null);
+        setShowOfficerModal(false);
+        setSelectedTask(null);
+        setTimerRunning(false);
+        setTimer(focusSeconds);
+        setDistractionCount(0);
+        setIsDistracted(false);
+        setMockEventText("一切正常");
+        exitSupervisionTakeover();
+        void exitSupervisionFullscreen();
+        addLog(
+          ok
+            ? `任务执行失败已记录：${run.taskText}（${reason}）`
+            : `任务执行失败记录未保存：${run.taskText}`,
+          ok ? "warning" : "normal"
+        );
+        playBeep();
+        return ok;
+      } finally {
+        abortingSupervisionRef.current = false;
+      }
     },
     [addLog, currentOfficerId, distractionCount, focusSeconds]
   );
+
+  const handleCameraClosedByUser = useCallback(() => {
+    const run = readSupervisionRun();
+    if (!run?.launched) return;
+    void abortSupervisionRun("关闭摄像头");
+  }, [abortSupervisionRun]);
 
   const handleSupervisionModalClose = useCallback(() => {
     const run = readSupervisionRun();
@@ -314,10 +337,9 @@ export function MonitorScreen() {
   useEffect(() => {
     if (authLoading || !user || tasks.length === 0 || executeHandledRef.current) return;
 
-    const queryRaw = searchParams.get(EXECUTE_TASK_QUERY);
-    const queryId = queryRaw ? Number(queryRaw) : NaN;
     const stashId = readStashedExecuteTaskId();
-    const taskId = Number.isFinite(queryId) ? queryId : stashId;
+    const takeoverId = readSupervisionTakeover()?.taskId ?? null;
+    const taskId = stashId ?? takeoverId;
     if (!taskId) return;
 
     const task = tasks.find((item) => item.id === taskId && !item.checked);
@@ -330,18 +352,24 @@ export function MonitorScreen() {
     if (blocked) {
       executeHandledRef.current = true;
       clearStashedExecuteTask();
-      if (queryRaw) router.replace("/monitor");
+      exitSupervisionTakeover();
       alert(blocked);
       return;
     }
 
     executeHandledRef.current = true;
     clearStashedExecuteTask();
-    if (queryRaw) router.replace("/monitor");
 
     openSupervisionForTask(task);
     addLog(`进入任务执行：${task.text}`, "normal");
-  }, [addLog, authLoading, openSupervisionForTask, reminderNow, router, searchParams, tasks, user]);
+  }, [
+    addLog,
+    authLoading,
+    openSupervisionForTask,
+    reminderNow,
+    tasks,
+    user,
+  ]);
 
   const persistCompletedSession = useCallback(async () => {
     if (!user) {
@@ -359,6 +387,8 @@ export function MonitorScreen() {
 
     if (ok) {
       setSupervisionRun(null);
+      exitSupervisionTakeover();
+      void exitSupervisionFullscreen();
     } else {
       addLog("专注记录保存失败，请稍后重试", "warning");
     }
@@ -449,62 +479,6 @@ export function MonitorScreen() {
     addLog("已解除警报，恢复专注", "success");
   };
 
-  const handleSelectOfficer = (id: string) => {
-    const officerId = id as OfficerId;
-    setCurrentOfficerId(officerId);
-    setPreferredOfficer(officerId);
-    playChime();
-    const officer = OFFICERS.find((o) => o.id === officerId);
-    if (officer) addLog(`切换监督官：${officer.name}`, "normal");
-  };
-
-  const handleTaskStart = (task: ScheduledTaskLike) => {
-    if (!user) {
-      promptLogin("登录后才能启动任务并保存专注记录。");
-      return;
-    }
-    const full = tasks.find((item) => item.id === task.id);
-    if (!full) return;
-    if (full.scheduledStartAt && full.scheduledEndAt) {
-      const blocked = getExecuteBlockedMessage(toScheduledTaskLike(full), reminderNow);
-      if (blocked) {
-        alert(blocked);
-        return;
-      }
-    }
-    openSupervisionForTask(full);
-  };
-
-  const handleToggleTask = async (task: Task) => {
-    if (!user) {
-      promptLogin("登录后才能修改任务状态。");
-      return;
-    }
-
-    try {
-      const res = await request(`/api/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ checked: !task.checked }),
-      });
-
-      if (!res.ok) {
-        if (res.status === 401) promptLogin("登录后才能修改任务状态。");
-        throw new Error("PATCH_TASK_FAILED");
-      }
-
-      const updated = (await res.json()) as Task;
-      setTasks((prev) => {
-        const next = prev.map((item) => (item.id === updated.id ? updated : item));
-        syncTopTask(next, selectedTask?.text ?? null);
-        return next;
-      });
-      emitClientEvent(TASKS_CHANGED_EVENT);
-    } catch {
-      addLog("任务状态更新失败", "warning");
-    }
-  };
-
   const handleLaunch = async (officerId: string) => {
     if (!selectedTask) return;
     const id = officerId as OfficerId;
@@ -512,41 +486,57 @@ export function MonitorScreen() {
     await launchSupervisionWithOfficer(id, selectedTask);
   };
 
+  const crtMonitor = (
+    <CrtMonitor
+      ref={crtRef}
+      isDistracted={isDistracted}
+      mockEventText={mockEventText}
+      officerId={currentOfficerId}
+      onDistracted={(reason) => {
+        setIsDistracted(true);
+        setMockEventText(`AI 摄像头检测：${reason}`);
+        setDistractionCount((c) => c + 1);
+        playBeep();
+        addLog(`摄像头检测到摸鱼！${activeOfficer.name}鸣枪警报`, "warning");
+      }}
+      onFaceRestored={() => {
+        setIsDistracted(false);
+        setMockEventText("人脸已重新检测到，恢复专注");
+        playChime();
+        addLog("人脸重新出现，已解除警报", "success");
+      }}
+      onCameraClosedByUser={handleCameraClosedByUser}
+    />
+  );
+
+  const officerSelectModal = (
+    <OfficerSelectModal
+      taskText={selectedTask?.text ?? ""}
+      isOpen={showOfficerModal}
+      onClose={handleSupervisionModalClose}
+      onLaunch={handleLaunch}
+    />
+  );
+
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 pb-12">
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div
+      ref={takeoverRootRef}
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-[#1e1b4b] via-[#312e81] to-[#1e1b4b]"
+    >
+      <header className="shrink-0 border-b-2 border-white/15 px-4 py-3 text-center sm:px-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/80">
+          任务监督
+        </p>
+        <h2 className="mt-1 font-bangers text-xl sm:text-2xl text-white drop-shadow-[0_2px_0_#1C1917] line-clamp-2">
+          {topTaskText || selectedTask?.text || "专注中"}
+        </h2>
+        <p className="mt-1 text-xs font-bold text-amber-100/80">
+          监督官：{activeOfficer.name}
+        </p>
+      </header>
 
-      {/* Column 1: Officer Roster (3 cols) */}
-      <aside className="lg:col-span-3 space-y-6">
-        <OfficerSelector
-          officers={OFFICERS}
-          currentId={currentOfficerId}
-          onSelect={handleSelectOfficer}
-        />
-        <BlackBoxLogs entries={logs} />
-      </aside>
-
-      {/* Column 2: CRT Monitor + Clock (5 cols) */}
-      <section className="lg:col-span-5 space-y-6">
-        <CrtMonitor
-          ref={crtRef}
-          isDistracted={isDistracted}
-          mockEventText={mockEventText}
-          officerId={currentOfficerId}
-          onDistracted={(reason) => {
-            setIsDistracted(true);
-            setMockEventText(`AI 摄像头检测：${reason}`);
-            setDistractionCount((c) => c + 1);
-            playBeep();
-            addLog(`摄像头检测到摸鱼！${activeOfficer.name}鸣枪警报`, "warning");
-          }}
-          onFaceRestored={() => {
-            setIsDistracted(false);
-            setMockEventText("人脸已重新检测到，恢复专注");
-            playChime();
-            addLog("人脸重新出现，已解除警报", "success");
-          }}
-        />
+      <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 overflow-y-auto px-3 py-4 sm:gap-5 sm:px-6 sm:py-5 w-full max-w-3xl mx-auto">
+        <div className="w-full">{crtMonitor}</div>
         <OfficerBubble
           officer={activeOfficer}
           isDistracted={isDistracted}
@@ -562,59 +552,9 @@ export function MonitorScreen() {
           onMockAway={triggerMockAway}
           onResolve={resolveDistraction}
         />
-      </section>
+      </div>
 
-      {/* Column 3: Quick Dispatch — 可直接添加任务 */}
-      <section className="lg:col-span-4 space-y-4">
-        <QuickDispatch
-          topTaskText={topTaskText}
-          canEdit={Boolean(user)}
-          onRequireLogin={() => promptLogin("登录后才能创建并保存任务。")}
-          onTaskAdded={(task) => {
-            setTasks((prev) => {
-              const next = [task, ...prev];
-              syncTopTask(next, selectedTask?.text ?? null);
-              return next;
-            });
-            setTopTaskText(task.text);
-            playChime();
-            addLog(`快速添加任务：${task.text}`, "success");
-          }}
-        />
-
-        <TodoList
-          tasks={tasks}
-          now={reminderNow}
-          canEdit={Boolean(user)}
-          onRequireLogin={() => promptLogin("登录后才能查看并同步你的任务列表。")}
-          onToggleTask={handleToggleTask}
-          onTaskStart={(task) => handleTaskStart(toScheduledTaskLike(task))}
-        />
-
-        {/* Officer quotes reference card */}
-        <div className="bg-white p-5 comic-border comic-shadow-sm">
-          <p className="font-bangers text-lg text-[#1C1917] mb-3 border-b-2 border-black pb-1">OFFICER ROSTER</p>
-          <div className="space-y-2">
-            {OFFICERS.map((o) => (
-              <div key={o.id} className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: o.color }}></div>
-                <span className="text-xs font-bold text-neutral-700">{o.name}</span>
-                <span className="text-[10px] text-neutral-400 truncate">— {o.title}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Officer 选择弹窗 */}
-      <OfficerSelectModal
-        taskText={selectedTask?.text ?? ""}
-        isOpen={showOfficerModal}
-        onClose={handleSupervisionModalClose}
-        onLaunch={handleLaunch}
-      />
-
-    </div>
+      {officerSelectModal}
     </div>
   );
 }

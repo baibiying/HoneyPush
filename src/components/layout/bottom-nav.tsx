@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Tv, CalendarDays, Archive } from "lucide-react";
+import { CalendarDays, Archive } from "lucide-react";
+import { useSupervisionTakeover } from "@/hooks/use-supervision-takeover";
 
 const NAV_ITEMS = [
   { href: "/",        icon: CalendarDays, label: "AI 排期", match: ["/", "/schedule"] },
-  { href: "/monitor", icon: Tv,           label: "监督视窗", match: ["/monitor"] },
   { href: "/archive", icon: Archive,      label: "档案战报", match: ["/archive"] },
 ] as const;
 
@@ -16,6 +16,9 @@ function isNavActive(pathname: string, match: readonly string[]) {
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { active: takeoverActive } = useSupervisionTakeover();
+
+  if (takeoverActive) return null;
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-orange-400 border-t-4 border-[#1C1917] pb-[env(safe-area-inset-bottom)]">

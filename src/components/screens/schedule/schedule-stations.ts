@@ -37,7 +37,7 @@ export const STATIONS: StationConfig[] = [
     shore: "from-amber-100 to-amber-300",
     decor: "🌴",
     islandPath:
-      "M 11 51 C 1 34, 5 12, 30 5 C 54 1, 86 11, 92 35 C 97 58, 79 85, 49 89 C 22 91, 7 72, 11 51 Z",
+      "M 11 51 C 1 34, 5 12, 30 5 C 54 1, 86 11, 92 35 C 97 58, 79 85, 49 89 C 22 91, 7 72, 9 61, 11 51 Z",
     islandFillTop: "#4ade80",
     islandFillBottom: "#14532d",
     islandSand: "#fde68a",
@@ -56,7 +56,7 @@ export const STATIONS: StationConfig[] = [
     shore: "from-sky-100 to-cyan-200",
     decor: "🧭",
     islandPath:
-      "M 13 17 C 34 5, 62 6, 78 16 L 92 20 C 99 30, 98 46, 94 58 L 99 74 C 90 90, 60 90, 38 84 C 16 74, 3 52, 7 32 C 9 22, 13 17 Z",
+      "M 13 17 C 34 5, 62 6, 78 16 L 92 20 C 99 30, 98 46, 94 58 L 99 74 C 90 90, 60 90, 38 84 C 16 74, 3 52, 7 32 C 9 22, 11 19, 13 17 Z",
     islandFillTop: "#7dd3fc",
     islandFillBottom: "#1e3a8a",
     islandSand: "#fef08a",
@@ -75,7 +75,7 @@ export const STATIONS: StationConfig[] = [
     shore: "from-orange-100 to-amber-200",
     decor: "⏳",
     islandPath:
-      "M 5 40 C 11 13, 44 3, 68 13 C 92 25, 96 56, 81 79 C 61 94, 28 92, 11 75 C 2 58, 5 40 Z",
+      "M 5 40 C 11 13, 44 3, 68 13 C 92 25, 96 56, 81 79 C 61 94, 28 92, 11 75 C 2 58, 3.5 49, 5 40 Z",
     islandFillTop: "#fcd34d",
     islandFillBottom: "#9a3412",
     islandSand: "#fff7ed",
@@ -94,7 +94,7 @@ export const STATIONS: StationConfig[] = [
     shore: "from-violet-100 to-fuchsia-200",
     decor: "✨",
     islandPath:
-      "M 24 15 C 47 4, 77 9, 88 33 C 95 57, 84 82, 53 87 C 28 85, 9 64, 11 40 C 14 26, 24 15 Z",
+      "M 24 15 C 47 4, 77 9, 88 33 C 95 57, 84 82, 53 87 C 28 85, 9 64, 11 40 C 14 26, 19 20, 24 15 Z",
     islandFillTop: "#f0abfc",
     islandFillBottom: "#4c1d95",
     islandSand: "#fce7f3",
@@ -113,7 +113,7 @@ export const STATIONS: StationConfig[] = [
     shore: "from-orange-100 to-red-200",
     decor: "👮",
     islandPath:
-      "M 8 38 C 4 18, 28 4, 52 6 C 78 8, 94 28, 92 52 C 90 76, 68 90, 42 88 C 18 86, 6 62, 8 38 Z",
+      "M 8 38 C 4 18, 28 4, 52 6 C 78 8, 94 28, 92 52 C 90 76, 68 90, 42 88 C 18 86, 6 62, 7 50, 8 38 Z",
     islandFillTop: "#fb923c",
     islandFillBottom: "#7f1d1d",
     islandSand: "#fed7aa",

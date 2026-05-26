@@ -1,12 +1,15 @@
-export const EXECUTE_TASK_QUERY = "taskId";
+import { enterSupervisionTakeover } from "@/lib/supervision-takeover";
+
 export const EXECUTE_TASK_STORAGE_KEY = "honeypush-execute-task-v1";
 
 export type ExecuteTaskPayload = {
   taskId: number;
 };
 
-export function buildExecuteTaskUrl(taskId: number) {
-  return `/monitor?${EXECUTE_TASK_QUERY}=${taskId}`;
+/** 到点/自动执行：全屏叠层监督，不改变当前路由 */
+export function beginAutoTaskSupervision(taskId: number) {
+  stashExecuteTask(taskId);
+  enterSupervisionTakeover(taskId);
 }
 
 export function stashExecuteTask(taskId: number) {

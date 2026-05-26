@@ -25,6 +25,8 @@ interface CrtMonitorProps {
   officerId?: string;
   onDistracted?: (reason: string) => void;
   onFaceRestored?: () => void;
+  /** 用户主动关闭摄像头或系统收回权限时 */
+  onCameraClosedByUser?: () => void;
 }
 
 const MISSING_FRAMES_THRESHOLD = 3;
@@ -36,10 +38,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     officerId = "yuri",
     onDistracted,
     onFaceRestored,
+    onCameraClosedByUser,
   },
   ref
 ) {
   const [cameraActive, setCameraActive] = useState(false);
+  const cameraActiveRef = useRef(false);
+  const suppressCloseNotifyRef = useRef(false);
+  const onCameraClosedByUserRef = useRef(onCameraClosedByUser);
+  onCameraClosedByUserRef.current = onCameraClosedByUser;
   const [detectionStatus, setDetectionStatus] = useState<
     "idle" | "detecting" | "no-face" | "face-ok" | "loading"
   >("idle");
@@ -106,8 +113,39 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     }
   }, [onDistracted, onFaceRestored]);
 
+  const notifyCameraClosedByUser = useCallback(() => {
+    onCameraClosedByUserRef.current?.();
+  }, []);
+
+  const stopCamera = useCallback(
+    (options?: { notifyUser?: boolean }) => {
+      const wasActive = cameraActiveRef.current;
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((t) => {
+          t.onended = null;
+          t.stop();
+        });
+        videoRef.current.srcObject = null;
+      }
+      cameraActiveRef.current = false;
+      setCameraActive(false);
+      setDetectionStatus("idle");
+      setFaceCount(0);
+
+      const shouldNotify =
+        options?.notifyUser === true &&
+        wasActive &&
+        !suppressCloseNotifyRef.current;
+      if (shouldNotify) {
+        notifyCameraClosedByUser();
+      }
+    },
+    [notifyCameraClosedByUser]
+  );
+
   const startCamera = useCallback(async () => {
-    if (cameraActive) return;
+    if (cameraActiveRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -116,31 +154,39 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           height: { ideal: 480 },
         },
       });
+      stream.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          if (!cameraActiveRef.current) return;
+          stopCamera({ notifyUser: true });
+        };
+      });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+      cameraActiveRef.current = true;
       setCameraActive(true);
       await loadFaceApi();
     } catch (error) {
       alert(`摄像头启动失败：${error instanceof Error ? error.message : "未知错误"}`);
+      cameraActiveRef.current = false;
       setCameraActive(false);
       throw error;
     }
-  }, [cameraActive, loadFaceApi]);
+  }, [loadFaceApi, stopCamera]);
 
-  const stopCamera = useCallback(() => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((t) => t.stop());
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-    setDetectionStatus("idle");
-    setFaceCount(0);
-  }, []);
-
-  useImperativeHandle(ref, () => ({ startCamera, stopCamera }), [startCamera, stopCamera]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      startCamera,
+      stopCamera: () => {
+        suppressCloseNotifyRef.current = true;
+        stopCamera({ notifyUser: false });
+        suppressCloseNotifyRef.current = false;
+      },
+    }),
+    [startCamera, stopCamera]
+  );
 
   useEffect(() => {
     if (cameraActive && modelLoaded) {
@@ -166,13 +212,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
   useEffect(() => {
     return () => {
-      stopCamera();
+      suppressCloseNotifyRef.current = true;
+      stopCamera({ notifyUser: false });
+      suppressCloseNotifyRef.current = false;
       if (detectionTimerRef.current) clearInterval(detectionTimerRef.current);
     };
   }, [stopCamera]);
 
   const toggleCamera = async () => {
-    if (cameraActive) stopCamera();
+    if (cameraActive) stopCamera({ notifyUser: true });
     else await startCamera();
   };
 
@@ -346,7 +394,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           className="flex-1 comic-border-2 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-white font-bold py-1.5 px-3 text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
           <Camera className={`w-3.5 h-3.5 ${cameraActive ? "text-rose-400" : "text-emerald-400"}`} />
-          <span>{cameraActive ? "关闭实景镜头" : "开启实景摄像头"}</span>
+          <span>{cameraActive ? "关闭镜头（记为失败）" : "开启实景摄像头"}</span>
         </button>
         <div className="text-[10px] text-stone-400 font-mono px-2 bg-stone-950 rounded border border-stone-800 py-1 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />

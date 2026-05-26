@@ -6,7 +6,9 @@ import { AppHeader } from "@/components/layout/app-header";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { GlobalScheduledTaskRunner } from "@/components/layout/global-scheduled-task-runner";
+import { GlobalSupervisionTakeover } from "@/components/layout/global-supervision-takeover";
 import { GlobalUpcomingTaskToasts } from "@/components/layout/global-upcoming-task-toasts";
+import { MainContentShell } from "@/components/layout/main-content-shell";
 
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -65,13 +67,14 @@ export default function RootLayout({
         <AuthProvider>
           <GlobalUpcomingTaskToasts />
           <GlobalScheduledTaskRunner />
+          <GlobalSupervisionTakeover />
           {/* Header — sticky at top */}
           <AppHeader />
           {/* Main content
               Mobile:  header≈56px + bottom-nav≈56px + Eazo底栏≈72px → pb-[140px]
               Desktop: header≈88px(两行) + Eazo底栏≈72px余量 → pt-[96px] pb-[120px] */}
           <main className="flex-1 pt-[60px] pb-[140px] md:pt-[96px] md:pb-[120px]">
-            {children}
+            <MainContentShell>{children}</MainContentShell>
           </main>
           {/* Bottom nav — mobile only */}
           <BottomNav />

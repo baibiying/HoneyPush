@@ -3,6 +3,7 @@
 import { Bell, Clock, Lightbulb, Swords, X } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useGlobalUpcomingTaskReminders } from "@/hooks/use-global-upcoming-task-reminders";
+import { useSupervisionTakeover } from "@/hooks/use-supervision-takeover";
 import {
   FROSTED_PANEL,
   ScheduleHubBackground,
@@ -162,11 +163,12 @@ function UpcomingTaskToast({
 /** 全站右上角：排期开始前 30 分钟的任务提醒 */
 export function GlobalUpcomingTaskToasts() {
   const { user, loading: authLoading } = useAuth();
+  const { active: takeoverActive } = useSupervisionTakeover();
   const { now, upcoming, snooze, dismissPermanent } = useGlobalUpcomingTaskReminders({
     enabled: Boolean(user) && !authLoading,
   });
 
-  if (!user || upcoming.length === 0) return null;
+  if (!user || takeoverActive || upcoming.length === 0) return null;
 
   return (
     <div

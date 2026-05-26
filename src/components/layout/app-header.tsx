@@ -1,17 +1,17 @@
 "use client";
 
-import { Coins, Flame, Tv, CalendarDays, Archive, LogOut } from "lucide-react";
+import { Coins, Flame, CalendarDays, Archive, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useSupervisionTakeover } from "@/hooks/use-supervision-takeover";
 import { AUTH_CHANGED_EVENT, STATS_CHANGED_EVENT } from "@/lib/client-events";
 
 const NAV_ITEMS = [
-  { href: "/",         icon: CalendarDays, label: "AI 排期", match: ["/", "/schedule"] },
-  { href: "/monitor",  icon: Tv,           label: "监督视窗", match: ["/monitor"] },
-  { href: "/archive",  icon: Archive,      label: "档案战报", match: ["/archive"] },
+  { href: "/",        icon: CalendarDays, label: "AI 排期", match: ["/", "/schedule"] },
+  { href: "/archive", icon: Archive,      label: "档案战报", match: ["/archive"] },
 ] as const;
 
 function isNavActive(pathname: string, match: readonly string[]) {
@@ -23,6 +23,7 @@ export function AppHeader() {
   const [consecDays, setConsecDays] = useState(0);
   const pathname = usePathname();
   const { user, openAuthModal, logout } = useAuth();
+  const { active: takeoverActive } = useSupervisionTakeover();
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +74,8 @@ export function AppHeader() {
   }, [user]);
 
   const displayName = user?.name || user?.email || "已登录";
+
+  if (takeoverActive) return null;
 
   return (
     <header className="px-4 md:px-8 py-2 md:py-3 bg-[#FAF4D3] border-b-4 border-[#1C1917] fixed top-0 left-0 right-0 z-50">

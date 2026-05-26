@@ -84,7 +84,12 @@ export function useAutoExecuteScheduledTask({
       if (Number.isNaN(startMs)) continue;
 
       const delay = startMs - Date.now();
-      if (delay <= 0 || delay > MAX_SCHEDULE_MS) continue;
+      if (delay > MAX_SCHEDULE_MS) continue;
+
+      if (delay <= 0) {
+        tryPromptExecute(task);
+        continue;
+      }
 
       timeoutIds.push(
         setTimeout(() => {
