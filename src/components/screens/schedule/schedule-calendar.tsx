@@ -165,7 +165,7 @@ function getTaskBlockClasses(palette: CalendarTaskPalette) {
     palette.border,
     palette.bg,
     "shadow-[0_2px_0_rgba(28,25,23,0.85)]",
-    "px-1.5 py-1 text-white",
+    "px-2 py-0.5 text-white",
   ].join(" ");
 }
 
@@ -203,7 +203,11 @@ function CalendarTaskBlock({
   const palette = getCalendarTaskPalette(task.id, colorMap);
   const timeRange = formatBlockTimeRange(startAt, endAt);
   const titleLineClamp =
-    height >= 64 ? "line-clamp-3 text-[10px]" : height >= 44 ? "line-clamp-2 text-[9px]" : "truncate text-[9px]";
+    height >= 72
+      ? "line-clamp-3 text-lg sm:text-xl leading-tight"
+      : height >= 48
+        ? "line-clamp-2 text-base sm:text-lg leading-tight"
+        : "truncate text-base sm:text-lg leading-tight";
 
   const openTooltip = () => {
     const rect = blockRef.current?.getBoundingClientRect();
