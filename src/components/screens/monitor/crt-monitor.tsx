@@ -10,7 +10,9 @@ import {
   useImperativeHandle,
 } from "react";
 import { motion } from "framer-motion";
-import { OFFICERS } from "@/lib/officers-data";
+import { getOfficerAlertVideoSrc, OFFICERS } from "@/lib/officers-data";
+import { buildBilibiliPlayerUrl } from "@/lib/bilibili-player";
+import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-video";
 
 export type CrtMonitorHandle = {
   startCamera: () => Promise<void>;
@@ -285,15 +287,27 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             className="absolute inset-0 flex flex-col"
             style={{ zIndex: 50 }}
           >
-            <iframe
-              key={`${officerId}-${alertVideoUrl}`}
-              title={`${activeOfficer.name} 监督视频`}
-              className="flex-1 w-full"
-              src={`https://player.bilibili.com/player.html?bvid=${alertVideoUrl}&autoplay=1&danmaku=0&high_quality=1`}
-              style={{ border: "none" }}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
-              allowFullScreen
-            />
+            {activeOfficer.alertVideoDurationSec != null ? (
+              <OfficerClipVideo
+                key={`${officerId}-clip-${alertVideoUrl}`}
+                className="flex-1 w-full min-h-0 object-contain bg-black"
+                src={getOfficerAlertVideoSrc(activeOfficer)}
+                startSec={activeOfficer.alertVideoStartSec ?? 0}
+                durationSec={activeOfficer.alertVideoDurationSec}
+                autoPlay
+                controls={false}
+              />
+            ) : (
+              <iframe
+                key={`${officerId}-${alertVideoUrl}`}
+                title={`${activeOfficer.name} 监督视频`}
+                className="flex-1 w-full"
+                src={buildBilibiliPlayerUrl(alertVideoUrl, { autoplay: true })}
+                style={{ border: "none" }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                allowFullScreen
+              />
+            )}
             <div className="bg-black/90 px-3 py-1.5 flex items-center justify-center gap-2 shrink-0">
               <span className="bg-rose-600 text-white font-bangers text-xs px-2 py-0.5 tracking-widest animate-pulse">
                 {activeOfficer.name} · 抓包中！
