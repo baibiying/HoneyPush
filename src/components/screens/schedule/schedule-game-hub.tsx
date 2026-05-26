@@ -1,16 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  CalendarDays,
-  Clock,
-  LayoutGrid,
-  Map,
-  Plus,
-  X,
-} from "lucide-react";
+import { CalendarDays, Clock, LayoutGrid, X } from "lucide-react";
+import { ScheduleAdventureMap } from "./schedule-adventure-map";
 
-export type ScheduleScene = "map" | "tasks" | "time" | "calendar";
+import type { ScheduleScene } from "./schedule-stations";
+
+export type { ScheduleScene } from "./schedule-stations";
 
 /** 与四象限、创建任务内容区一致的紫色磨砂面板 */
 const FROSTED_PANEL =
@@ -27,9 +23,6 @@ type ScheduleGameHubProps = {
   scene: ScheduleScene;
   onSceneChange: (scene: ScheduleScene) => void;
   canEdit: boolean;
-  stats: { total: number; pending: number; done: number };
-  scheduledCount: number;
-  availabilityCount: number;
   questSteps: QuestStep[];
   onOpenAddTask: () => void;
   onRequireLogin: (message: string) => void;
@@ -40,183 +33,71 @@ type ScheduleGameHubProps = {
   scheduleCalendarHidden?: boolean;
 };
 
-type StationConfig = {
-  id: ScheduleScene;
-  /** create = 直接打开创建任务表单 */
-  action: "create" | "enter";
-  title: string;
-  subtitle: string;
-  icon: typeof Plus;
-  gradient: string;
-  glow: string;
-  badge?: string;
-};
+export type { StationConfig } from "./schedule-stations";
+export { STATIONS } from "./schedule-stations";
 
-const STATIONS: StationConfig[] = [
-  {
-    id: "tasks",
-    action: "create",
-    title: "创建任务",
-    subtitle: "录入名称、用时与截止时间",
-    icon: Plus,
-    gradient: "from-emerald-500 to-teal-600",
-    glow: "shadow-[0_0_28px_rgba(16,185,129,0.45)]",
-  },
-  {
-    id: "tasks",
-    action: "enter",
-    title: "查看任务",
-    subtitle: "浏览已创建任务 · 四象限分布",
-    icon: LayoutGrid,
-    gradient: "from-sky-500 to-indigo-600",
-    glow: "shadow-[0_0_28px_rgba(56,189,248,0.45)]",
-  },
-  {
-    id: "time",
-    action: "enter",
-    title: "可用时段",
-    subtitle: "设置每天能做任务的时段",
-    icon: Clock,
-    gradient: "from-amber-400 to-orange-500",
-    glow: "shadow-[0_0_28px_rgba(251,191,36,0.45)]",
-  },
-  {
-    id: "calendar",
-    action: "enter",
-    title: "AI 排期",
-    subtitle: "查看日历 · 一键排期全部任务",
-    icon: CalendarDays,
-    gradient: "from-fuchsia-500 to-purple-600",
-    glow: "shadow-[0_0_28px_rgba(192,132,252,0.45)]",
-  },
-];
-
-function QuestTracker({ steps, activeScene }: { steps: QuestStep[]; activeScene: ScheduleScene }) {
+function MapOceanBackdrop() {
   return (
-    <ol className="flex flex-wrap items-center justify-center gap-1 sm:gap-2">
-      {steps.map((step, index) => {
-        const active = activeScene === step.scene || (activeScene === "map" && step.done);
-        return (
-          <li key={step.id} className="flex items-center gap-1 sm:gap-2">
-            <span
-              className={[
-                "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] sm:text-xs font-bold border-2 transition-all",
-                step.done
-                  ? "bg-amber-300/90 border-amber-600 text-amber-950"
-                  : "bg-white/10 border-white/25 text-white/70",
-                active && !step.done ? "ring-2 ring-amber-200/80 scale-105" : "",
-              ].join(" ")}
-            >
-              <span
-                className={[
-                  "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black",
-                  step.done ? "bg-amber-600 text-white" : "bg-white/15 text-white/80",
-                ].join(" ")}
-              >
-                {step.done ? "✓" : index + 1}
-              </span>
-              {step.label}
-            </span>
-            {index < steps.length - 1 && (
-              <span className="hidden sm:inline text-white/30 text-xs font-bold">→</span>
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function GameHud({
-  stats,
-  scheduledCount,
-  canEdit,
-}: {
-  stats: { total: number; pending: number; done: number };
-  scheduledCount: number;
-  canEdit: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/80">HoneyPush · 排期副本</p>
-        <h1 className="font-bangers text-2xl sm:text-3xl text-white tracking-wide drop-shadow-md">
-          AI 排期冒险
-        </h1>
-      </div>
-      <div className="flex flex-wrap gap-2 text-[10px] sm:text-xs font-bold">
-        <span className="rounded-lg border-2 border-amber-400/60 bg-amber-400/20 px-2.5 py-1 text-amber-100">
-          任务 {stats.total}
-        </span>
-        <span className="rounded-lg border-2 border-emerald-400/50 bg-emerald-500/20 px-2.5 py-1 text-emerald-100">
-          待办 {stats.pending}
-        </span>
-        <span className="rounded-lg border-2 border-violet-400/50 bg-violet-500/20 px-2.5 py-1 text-violet-100">
-          已排期 {scheduledCount}
-        </span>
-        {!canEdit && (
-          <span className="rounded-lg border-2 border-white/30 bg-white/10 px-2.5 py-1 text-white/80">
-            浏览模式
-          </span>
-        )}
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      <div
+        className="absolute inset-0 opacity-50"
+        style={{
+          backgroundImage: [
+            "radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.55), transparent)",
+            "radial-gradient(1px 1px at 30% 65%, rgba(255,255,255,0.35), transparent)",
+            "radial-gradient(1.5px 1.5px at 55% 15%, rgba(255,255,255,0.45), transparent)",
+            "radial-gradient(1px 1px at 72% 48%, rgba(255,255,255,0.3), transparent)",
+            "radial-gradient(1px 1px at 88% 28%, rgba(255,255,255,0.5), transparent)",
+            "radial-gradient(1px 1px at 92% 78%, rgba(255,255,255,0.35), transparent)",
+          ].join(", "),
+        }}
+      />
+      <div className="absolute inset-x-0 bottom-0 h-[28%] bg-gradient-to-t from-cyan-900/35 via-sky-900/10 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-16 sm:h-20 overflow-hidden opacity-40">
+        <div className="ocean-wave-drift flex w-[200%] h-full">
+          <svg className="w-1/2 h-full" viewBox="0 0 400 40" preserveAspectRatio="none" aria-hidden>
+            <path
+              d="M0 22 C50 8 100 32 150 18 C200 6 250 28 300 16 C350 8 380 20 400 14 V40 H0Z"
+              fill="rgba(56,189,248,0.25)"
+            />
+          </svg>
+          <svg className="w-1/2 h-full" viewBox="0 0 400 40" preserveAspectRatio="none" aria-hidden>
+            <path
+              d="M0 22 C50 8 100 32 150 18 C200 6 250 28 300 16 C350 8 380 20 400 14 V40 H0Z"
+              fill="rgba(56,189,248,0.25)"
+            />
+          </svg>
+        </div>
       </div>
     </div>
   );
 }
 
-function StationCard({
-  station,
-  onClick,
-  onCreateTask,
-  canEdit,
-  onRequireLogin,
-}: {
-  station: StationConfig;
-  onClick: () => void;
-  onCreateTask?: () => void;
-  canEdit: boolean;
-  onRequireLogin: (message: string) => void;
-}) {
-  const Icon = station.icon;
-  const opensCreateForm = station.action === "create";
-
-  const handleClick = () => {
-    if (opensCreateForm && onCreateTask) {
-      if (!canEdit) {
-        onRequireLogin("登录后才能创建任务。");
-        return;
-      }
-      onCreateTask();
-      return;
-    }
-    onClick();
-  };
-
+function GameHud() {
   return (
-    <button
-      type="button"
-      onClick={handleClick}
+    <div
       className={[
-        "group relative flex h-full min-h-[128px] sm:min-h-[148px] w-full flex-col rounded-2xl border-[3px] border-[#1C1917] p-4 sm:p-5 transition-all duration-200",
-        "hover:-translate-y-1 hover:scale-[1.02] active:translate-y-0 active:scale-[0.99]",
-        "bg-gradient-to-br",
-        station.gradient,
-        station.glow,
-        "comic-shadow-sm",
+        "relative w-full max-w-2xl mx-auto text-center",
+        "rounded-xl border-2 border-[#1C1917] bg-black/30 backdrop-blur-md",
+        "shadow-[0_4px_0_#1C1917,0_0_24px_rgba(129,140,248,0.25)]",
+        "px-4 py-2.5 sm:px-5 sm:py-3",
       ].join(" ")}
     >
-      <div className="absolute inset-0 rounded-2xl opacity-20 bg-[radial-gradient(circle_at_30%_20%,white,transparent_55%)] pointer-events-none" />
-      <span className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-white/90 text-[#1C1917] shadow-sm pointer-events-none">
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10 text-[10px] font-bold text-white/80 group-hover:text-white drop-shadow-[0_1px_0_#1C1917]">
-        进入关卡 →
-      </span>
-
-      <h3 className="absolute inset-0 z-[1] flex items-center justify-center px-12 py-8 text-center font-bangers text-xl sm:text-2xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917] pointer-events-none">
-        {station.title}
-      </h3>
-    </button>
+      <div
+        className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/50 to-transparent"
+        aria-hidden
+      />
+      <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.22em] text-amber-200/90">
+        HoneyPush
+      </p>
+      <h1 className="font-bangers mt-0.5 text-3xl sm:text-4xl text-white tracking-wide leading-none drop-shadow-[0_3px_0_#1C1917]">
+        督蜜
+      </h1>
+      <p className="mx-auto mt-1.5 max-w-md font-comic text-xs sm:text-sm font-bold leading-snug text-amber-100/90">
+        AI 智能排期 + 游戏化监督 · 理清任务、专注执行
+      </p>
+      <p className="mt-1 text-[10px] sm:text-xs font-semibold text-white/45">点击岛屿开始冒险</p>
+    </div>
   );
 }
 
@@ -224,9 +105,6 @@ export function ScheduleGameHub({
   scene,
   onSceneChange,
   canEdit,
-  stats,
-  scheduledCount,
-  availabilityCount,
   questSteps,
   onOpenAddTask,
   onRequireLogin,
@@ -236,8 +114,6 @@ export function ScheduleGameHub({
   scheduleOverlay,
   scheduleCalendarHidden = false,
 }: ScheduleGameHubProps) {
-  const mapStations: StationConfig[] = STATIONS;
-
   return (
     <div className="relative w-full h-full min-h-0 flex flex-col flex-1">
       <div className="relative flex-1 min-h-0 overflow-hidden rounded-none border-y-[4px] border-[#1C1917] comic-shadow-lg flex flex-col">
@@ -255,56 +131,31 @@ export function ScheduleGameHub({
           aria-hidden
         />
 
-        <div className="relative z-10 flex flex-1 min-h-0 flex-col gap-3 sm:gap-4 p-3 sm:p-5 md:p-6 overflow-hidden">
-          {scene === "map" && (
-            <>
-              <GameHud stats={stats} scheduledCount={scheduledCount} canEdit={canEdit} />
-
-              <div className="shrink-0 rounded-xl sm:rounded-2xl border-2 border-white/15 bg-black/25 px-3 py-2.5 sm:px-4 backdrop-blur-sm">
-                <p className="text-center text-[10px] font-bold text-amber-200/90 mb-2 tracking-wider">
-                  冒险进度
-                </p>
-                <QuestTracker steps={questSteps} activeScene={scene} />
-              </div>
-
-              {!canEdit && (
-                <div className="shrink-0 rounded-xl border-2 border-amber-400/60 bg-amber-400/15 px-4 py-2 text-xs font-semibold text-amber-100 text-center">
-                  当前为浏览模式。登录后可创建任务、查看任务、配置时间并 AI 排期。
-                </div>
-              )}
-            </>
-          )}
-
+        <div className="relative z-10 flex flex-1 min-h-0 flex-col overflow-hidden">
           {scene === "map" ? (
-            <div className="animate-[fadeIn_0.35s_ease-out] flex-1 min-h-0 overflow-y-auto py-2 flex flex-col justify-center">
-              <div className="mb-4 flex items-center justify-center gap-2 text-white/60">
-                <Map className="h-4 w-4" />
-                <p className="text-xs font-bold">选择关卡开始冒险</p>
+            <div className="relative flex-1 min-h-0 w-full animate-[fadeIn_0.35s_ease-out]">
+              <MapOceanBackdrop />
+              <ScheduleAdventureMap
+                questSteps={questSteps}
+                canEdit={canEdit}
+                onSceneChange={onSceneChange}
+                onOpenAddTask={onOpenAddTask}
+                onRequireLogin={onRequireLogin}
+              />
+
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center gap-2 px-3 pt-2 sm:pt-3">
+                <div className="pointer-events-auto w-full max-w-2xl">
+                  <GameHud />
+                </div>
+                {!canEdit && (
+                  <p className="pointer-events-auto w-full max-w-2xl rounded-lg border-2 border-amber-400/55 bg-amber-500/15 px-3 py-1.5 text-center text-[11px] sm:text-xs font-bold text-amber-100 backdrop-blur-sm shadow-[0_2px_0_#1C1917]">
+                    🔒 浏览模式 · 登录后可登岛冒险
+                  </p>
+                )}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full max-w-4xl mx-auto px-1 sm:px-4 items-stretch">
-                {mapStations.map((station, index) => (
-                  <StationCard
-                    key={`${station.title}-${index}`}
-                    station={station}
-                    canEdit={canEdit}
-                    onRequireLogin={onRequireLogin}
-                    onCreateTask={() => {
-                      if (!canEdit) {
-                        onRequireLogin("登录后才能创建任务。");
-                        return;
-                      }
-                      onOpenAddTask();
-                    }}
-                    onClick={() => onSceneChange(station.id)}
-                  />
-                ))}
-              </div>
-              <p className="mt-6 text-center text-[10px] text-white/50 font-medium max-w-md mx-auto">
-                推荐流程：创建任务 → 查看任务 → 可用时段 → AI 排期
-              </p>
             </div>
           ) : scene === "tasks" ? (
-            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden -mx-1 sm:-mx-2 animate-[fadeIn_0.3s_ease-out]">
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-5 md:p-6 animate-[fadeIn_0.3s_ease-out]">
               <button
                 type="button"
                 onClick={() => onSceneChange("map")}
@@ -330,7 +181,7 @@ export function ScheduleGameHub({
               </div>
             </div>
           ) : scene === "time" ? (
-            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden -mx-1 sm:-mx-2 animate-[fadeIn_0.3s_ease-out]">
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-5 md:p-6 animate-[fadeIn_0.3s_ease-out]">
               <button
                 type="button"
                 onClick={() => onSceneChange("map")}
@@ -356,7 +207,7 @@ export function ScheduleGameHub({
               </div>
             </div>
           ) : (
-            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden -mx-1 sm:-mx-2 animate-[fadeIn_0.3s_ease-out]">
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-5 md:p-6 animate-[fadeIn_0.3s_ease-out]">
               <button
                 type="button"
                 onClick={() => onSceneChange("map")}

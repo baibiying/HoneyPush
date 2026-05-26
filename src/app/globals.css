@@ -244,6 +244,30 @@
   animation: bubble-float 3.6s ease-in-out infinite;
 }
 
+@keyframes island-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.island-float {
+  animation: island-float 3.8s ease-in-out infinite;
+}
+
+@keyframes game-sparkle {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.game-sparkle {
+  animation: game-sparkle 2.4s ease-in-out infinite;
+}
+
+@keyframes ocean-wave {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ocean-wave-drift {
+  animation: ocean-wave 18s linear infinite;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

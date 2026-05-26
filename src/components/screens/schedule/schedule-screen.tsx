@@ -190,9 +190,15 @@ export function ScheduleScreen() {
   const questSteps = useMemo(
     () => [
       {
-        id: "collect",
+        id: "create",
         label: "创建任务",
-        done: pendingTasks.length > 0,
+        done: stats.total > 0,
+        scene: "tasks" as const,
+      },
+      {
+        id: "view",
+        label: "查看任务",
+        done: stats.total > 0,
         scene: "tasks" as const,
       },
       {
@@ -208,7 +214,7 @@ export function ScheduleScreen() {
         scene: "calendar" as const,
       },
     ],
-    [pendingTasks.length, validAvailabilityCount, scheduledCount]
+    [stats.total, validAvailabilityCount, scheduledCount]
   );
 
   useEffect(() => {
@@ -638,9 +644,6 @@ export function ScheduleScreen() {
         scene={scene}
         onSceneChange={setScene}
         canEdit={canEdit}
-        stats={stats}
-        scheduledCount={scheduledCount}
-        availabilityCount={availabilitySlots.length}
         questSteps={questSteps}
         onOpenAddTask={() => setAddTaskOpen(true)}
         onRequireLogin={promptLogin}
