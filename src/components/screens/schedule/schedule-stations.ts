@@ -1,5 +1,5 @@
 import { CalendarDays, Clock, LayoutGrid, Plus, Shield } from "lucide-react";
-export type ScheduleScene = "map" | "tasks" | "time" | "calendar" | "officer";
+export type ScheduleScene = "map" | "tasks" | "time" | "calendar" | "officer" | "performance";
 
 export type StationConfig = {
   id: ScheduleScene;

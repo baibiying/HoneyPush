@@ -1,27 +1,16 @@
 "use client";
 
-import { Coins, Flame, CalendarDays, Archive, LogOut } from "lucide-react";
+import { Coins, Flame, Archive, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useSupervisionTakeover } from "@/hooks/use-supervision-takeover";
 import { AUTH_CHANGED_EVENT, STATS_CHANGED_EVENT } from "@/lib/client-events";
 
-const NAV_ITEMS = [
-  { href: "/",        icon: CalendarDays, label: "AI 排期", match: ["/", "/schedule"] },
-  { href: "/archive", icon: Archive,      label: "档案战报", match: ["/archive"] },
-] as const;
-
-function isNavActive(pathname: string, match: readonly string[]) {
-  return match.includes(pathname);
-}
-
 export function AppHeader() {
   const [coinCount, setCoinCount] = useState(0);
   const [consecDays, setConsecDays] = useState(0);
-  const pathname = usePathname();
   const { user, openAuthModal, logout } = useAuth();
   const { active: takeoverActive } = useSupervisionTakeover();
 
@@ -103,6 +92,13 @@ export function AppHeader() {
 
           {/* Stats badges — 移动端右侧 */}
           <div className="flex items-center gap-1.5 shrink-0 md:hidden">
+            <Link
+              href="/archive"
+              className="bg-orange-300 text-[#1C1917] px-2 py-1 comic-border comic-shadow-sm text-[10px] font-bold"
+              aria-label="档案战报"
+            >
+              档案
+            </Link>
             <div className="bg-yellow-400 px-2 py-1 comic-border comic-shadow-sm flex items-center gap-1 font-bold text-[10px] select-none">
               <Coins className="w-3 h-3 text-[#1C1917]" />
               <span className="bg-[#1C1917] text-white px-1 py-0.5 font-mono">{coinCount}</span>
@@ -133,31 +129,17 @@ export function AppHeader() {
           </div>
         </div>
 
-        {/* 第二行：桌面端导航 + Stats（桌面端独占） */}
+        {/* 第二行：桌面端 Stats + 档案入口 */}
         <div className="hidden md:flex items-center gap-3">
-          {/* 桌面端导航按钮 */}
-          {NAV_ITEMS.map((item) => {
-            const isActive = isNavActive(pathname, item.match);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={[
-                  "flex items-center gap-2 px-4 py-2 text-sm font-bold transition-all comic-border-2",
-                  isActive
-                    ? "bg-orange-400 text-[#1C1917] comic-shadow-sm"
-                    : "bg-orange-300 text-[#1C1917] hover:bg-orange-200",
-                ].join(" ")}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          <Link
+            href="/archive"
+            className="flex items-center gap-2 px-3 py-2 text-sm font-bold bg-orange-300 text-[#1C1917] hover:bg-orange-200 comic-border-2 transition-all"
+          >
+            <Archive className="w-4 h-4" />
+            <span>档案战报</span>
+          </Link>
 
-          {/* 桌面端 Stats */}
-          <div className="flex items-center gap-2 ml-2">
+          <div className="flex items-center gap-2">
             <div className="bg-yellow-400 px-3 py-1.5 comic-border comic-shadow-sm flex items-center gap-1.5 font-bold text-xs select-none">
               <Coins className="w-4 h-4 text-[#1C1917]" />
               <span>专注币：</span>

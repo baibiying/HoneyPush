@@ -45,6 +45,14 @@ export async function getFocusSessions(userId: string, limit = 30) {
     .limit(limit);
 }
 
+export async function getAllFocusSessions(userId: string) {
+  return db
+    .select()
+    .from(focusSessions)
+    .where(eq(focusSessions.userId, userId))
+    .orderBy(desc(focusSessions.completedAt));
+}
+
 // ─── Tasks ───────────────────────────────────────────────────────────────────
 
 export async function getTasks(userId: string) {

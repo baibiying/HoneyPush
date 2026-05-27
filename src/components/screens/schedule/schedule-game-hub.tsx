@@ -32,6 +32,8 @@ type ScheduleGameHubProps = {
   officerPanel: ReactNode;
   scheduleOverlay?: ReactNode;
   scheduleCalendarHidden?: boolean;
+  mapPerformanceDock?: ReactNode;
+  performancePanel: ReactNode;
 };
 
 export type { StationConfig } from "./schedule-stations";
@@ -132,6 +134,8 @@ export function ScheduleGameHub({
   officerPanel,
   scheduleOverlay,
   scheduleCalendarHidden = false,
+  mapPerformanceDock,
+  performancePanel,
 }: ScheduleGameHubProps) {
   return (
     <div className="relative w-full h-full min-h-0 flex flex-col flex-1">
@@ -161,6 +165,8 @@ export function ScheduleGameHub({
                   </p>
                 )}
               </div>
+
+              {mapPerformanceDock}
 
               <MapAdventureHint />
 
@@ -290,6 +296,20 @@ export function ScheduleGameHub({
                   {schedulePanel}
                 </div>
                 {scheduleOverlay}
+              </div>
+            </div>
+          ) : scene === "performance" ? (
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-4 md:p-5 animate-[fadeIn_0.3s_ease-out]">
+              <button
+                type="button"
+                onClick={() => onSceneChange("map")}
+                className="absolute top-2 right-2 sm:top-3 sm:right-3 z-30 flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#1C1917] bg-[#FFF8E7] text-[#1C1917] shadow-[0_4px_0_#1C1917] hover:bg-amber-100"
+                aria-label="卷起卷轴，返回地图"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain">
+                {performancePanel}
               </div>
             </div>
           ) : null}

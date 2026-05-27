@@ -1,5 +1,6 @@
 import {
   expandScheduledTaskToFocusSegments,
+  POMODORO_BREAK_MINUTES,
   POMODORO_FOCUS_MINUTES,
   planPomodoroSegments,
   type TaskFocusSegment,
@@ -8,14 +9,11 @@ import {
 /** 尤里监督：每段专注最多 3 颗星，扣完即本 block 失败 */
 export const SUPERVISION_MAX_STRIKES = 3;
 
-/**
- * 监督专注单段时长（分钟）。
- * TODO(测试)：验收任务成功流程后改回 25，与 `POMODORO_FOCUS_MINUTES` 对齐。
- */
-export const SUPERVISION_FOCUS_BLOCK_MINUTES = 1;
+/** 监督专注单段时长（分钟），与番茄钟排期一致 */
+export const SUPERVISION_FOCUS_BLOCK_MINUTES = POMODORO_FOCUS_MINUTES;
 
-/** 监督段间休息时长（秒）；验收后改回 `POMODORO_BREAK_MINUTES * 60` */
-export const SUPERVISION_BREAK_SECONDS = 30;
+/** 监督段间休息时长（秒），与番茄钟排期一致 */
+export const SUPERVISION_BREAK_SECONDS = POMODORO_BREAK_MINUTES * 60;
 
 export type SupervisionFocusBlock = {
   blockIndex: number;

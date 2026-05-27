@@ -3,7 +3,6 @@ import "./globals.css";
 import { cn } from "@/utils/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { AppHeader } from "@/components/layout/app-header";
-import { BottomNav } from "@/components/layout/bottom-nav";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { GlobalScheduledTaskRunner } from "@/components/layout/global-scheduled-task-runner";
 import { GlobalSupervisionTakeover } from "@/components/layout/global-supervision-takeover";
@@ -73,11 +72,9 @@ export default function RootLayout({
           {/* Main content
               Mobile:  header≈56px + bottom-nav≈56px + Eazo底栏≈72px → pb-[140px]
               Desktop: header≈88px(两行) + Eazo底栏≈72px余量 → pt-[96px] pb-[120px] */}
-          <main className="flex-1 pt-[60px] pb-[140px] md:pt-[96px] md:pb-[120px]">
+          <main className="flex-1 pt-[60px] pb-[80px] md:pt-[96px] md:pb-[96px]">
             <MainContentShell>{children}</MainContentShell>
           </main>
-          {/* Bottom nav — mobile only */}
-          <BottomNav />
           <Toaster />
         </AuthProvider>
       </body>

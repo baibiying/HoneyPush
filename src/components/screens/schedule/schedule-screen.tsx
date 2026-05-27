@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { memory } from "@eazo/sdk";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -10,7 +10,10 @@ import { TaskAddDialog } from "./task-add-dialog";
 import { TaskEditDialog, type ScheduleTask } from "./task-edit-dialog";
 import { QuadrantTaskBoard } from "./quadrant-task-board";
 import { ScheduleCalendar } from "./schedule-calendar";
+import { PerformancePanel } from "@/components/screens/performance/performance-panel";
+import { usePerformanceReport } from "@/hooks/use-performance-report";
 import { ScheduleGameHub, type ScheduleScene } from "./schedule-game-hub";
+import { MapPerformanceDock } from "./map-performance-dock";
 import { ScheduleOfficerPanel } from "./schedule-officer-panel";
 import {
   PREFERRED_OFFICER_CHANGED_EVENT,
@@ -123,7 +126,9 @@ export function ScheduleScreen() {
   const [editingTask, setEditingTask] = useState<ScheduleTask | null>(null);
   const [openTaskMenuId, setOpenTaskMenuId] = useState<number | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const searchParams = useSearchParams();
   const [scene, setScene] = useState<ScheduleScene>("map");
+  const { report: performanceReport, loading: performanceLoading } = usePerformanceReport();
   const [preferredOfficerId, setPreferredOfficerId] = useState<OfficerId | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [schedulePromptOpen, setSchedulePromptOpen] = useState(false);
@@ -134,6 +139,12 @@ export function ScheduleScreen() {
   const prevSceneRef = useRef<ScheduleScene>("map");
 
   const canEdit = Boolean(user);
+
+  useEffect(() => {
+    if (searchParams.get("scene") === "performance") {
+      setScene("performance");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     setPreferredOfficerId(readPreferredOfficer());
@@ -793,6 +804,18 @@ export function ScheduleScreen() {
             onSelected={setPreferredOfficerId}
             onRequireLogin={promptLogin}
           />
+        }
+        mapPerformanceDock={
+          <MapPerformanceDock
+            report={performanceReport}
+            loading={performanceLoading}
+            canEdit={canEdit}
+            onOpenReport={() => setScene("performance")}
+            onRequireLogin={promptLogin}
+          />
+        }
+        performancePanel={
+          <PerformancePanel onRequireLogin={promptLogin} canEdit={canEdit} />
         }
       />
 
