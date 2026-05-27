@@ -23,3 +23,30 @@ export function yuriAlertVideoForStrike(strike: number): string | null {
   if (strike >= 3) return YURI_SUPERVISION_VIDEOS.shoot;
   return null;
 }
+
+export type YuriActiveClip =
+  | "intro"
+  | "idle"
+  | "patrol-left"
+  | "patrol-right"
+  | "warn"
+  | "draw-gun"
+  | "shoot"
+  | "none";
+
+export function yuriClipFromSrc(src: string | null): YuriActiveClip {
+  if (!src) return "none";
+  if (src === YURI_SUPERVISION_VIDEOS.intro) return "intro";
+  if (src === YURI_SUPERVISION_VIDEOS.idle) return "idle";
+  if (src === YURI_SUPERVISION_VIDEOS.patrolLeft) return "patrol-left";
+  if (src === YURI_SUPERVISION_VIDEOS.patrolRight) return "patrol-right";
+  if (src === YURI_SUPERVISION_VIDEOS.warn) return "warn";
+  if (src === YURI_SUPERVISION_VIDEOS.drawGun) return "draw-gun";
+  if (src === YURI_SUPERVISION_VIDEOS.shoot) return "shoot";
+  return "none";
+}
+
+/** 仅 idle 片段播放期间做摄像头行为检测 */
+export function isYuriBehaviorDetectionClip(clip: YuriActiveClip) {
+  return clip === "idle";
+}

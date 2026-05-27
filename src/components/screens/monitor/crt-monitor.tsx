@@ -17,11 +17,21 @@ import {
 } from "@/lib/officers-data";
 import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-video";
 import { YuriOfficerVideo } from "@/components/screens/monitor/yuri-officer-video";
-import { unlockBrowserAudio } from "@/lib/unlock-browser-audio";
 import {
-  averageDescriptors,
-  matchUserDescriptor,
-} from "@/lib/face-tracking/descriptor";
+  YuriStrikeStars,
+  yuriStrikeActionLabel,
+} from "@/components/screens/monitor/yuri-strike-stars";
+import {
+  primeUnmutedVideoPlayback,
+  unlockBrowserAudio,
+} from "@/lib/unlock-browser-audio";
+import { OFFICER_MAIN_VIDEO_CLASS } from "@/lib/officers/officer-main-video-layout";
+import {
+  isYuriBehaviorDetectionClip,
+  YURI_SUPERVISION_VIDEOS,
+  type YuriActiveClip,
+} from "@/lib/officers/yuri-supervision-videos";
+import { averageDescriptors } from "@/lib/face-tracking/descriptor";
 import { evaluateEnrollmentPose } from "@/lib/face-tracking/enrollment-pose";
 import {
   ENROLLMENT_POSE_RESET_FRAMES,
@@ -32,12 +42,19 @@ import {
   FRAMING_L2_SEC,
   FRAMING_L3_LONG_SEC,
   FRAMING_L3_SEC,
+  LABOR_LOST_CONFIRM_FRAMES,
   RESTORE_CONFIRM_FRAMES,
   TRIGGER_CONFIRM_FRAMES,
 } from "@/lib/face-tracking/config";
 import type { EnrollmentPoseIssue } from "@/lib/face-tracking/enrollment-pose";
+import { isLaborPose } from "@/lib/face-tracking/enrollment-pose";
+import {
+  handsLikelyInWorkspace,
+  measureWorkspaceSkinRatio,
+} from "@/lib/face-tracking/hands-workspace-detector";
 import {
   framingDistractionReason,
+  pickSupervisionFace,
   resolveSupervisionFraming,
 } from "@/lib/face-tracking/supervision-behavior";
 import {
@@ -76,6 +93,8 @@ interface CrtMonitorProps {
   onYuriThirdStrikeComplete?: () => void;
   /** 尤里教官：当前摸鱼次数（1～3） */
   yuriStrikeCount?: number;
+  /** 尤里：摸鱼警示播完进入 idle 检测（清除摸鱼 UI，保留扣星） */
+  onYuriIdleRecoveryStart?: () => void;
   fillViewport?: boolean;
 }
 
@@ -105,6 +124,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     onEnrollmentTimeout,
     onYuriThirdStrikeComplete,
     yuriStrikeCount = 0,
+    onYuriIdleRecoveryStart,
     fillViewport = false,
   },
   ref
@@ -145,6 +165,9 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   const [userFaceMatched, setUserFaceMatched] = useState(false);
   const [yuriSupervisionEnabled, setYuriSupervisionEnabled] = useState(false);
   const yuriSupervisionEnabledRef = useRef(false);
+  const [yuriIdleDetectionActive, setYuriIdleDetectionActive] = useState(false);
+  const yuriIdleDetectionActiveRef = useRef(false);
+  const [yuriDistractionBannerVisible, setYuriDistractionBannerVisible] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -153,12 +176,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   const userDescriptorRef = useRef<Float32Array | null>(null);
   const enrollmentSamplesRef = useRef<Float32Array[]>([]);
   const enrollmentBadFramesRef = useRef(0);
+  /** 采集阶段脸下方工作区肤色基线，用于监督时判断双手是否仍在画面 */
+  const handsSkinBaselineRef = useRef<number | null>(null);
 
   const framingBadSinceRef = useRef<number | null>(null);
   const phoneSinceRef = useRef<number | null>(null);
   const lastFramingIssueRef = useRef<EnrollmentPoseIssue>("no-face");
   const triggerFramesRef = useRef(0);
   const restoreFramesRef = useRef(0);
+  const laborLostStreakRef = useRef(0);
   const alreadyDistractedRef = useRef(false);
   const episodeLevelRef = useRef<DistractionLevel | 0>(0);
   const detectionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -179,6 +205,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     lastFramingIssueRef.current = "no-face";
     triggerFramesRef.current = 0;
     restoreFramesRef.current = 0;
+    laborLostStreakRef.current = 0;
     alreadyDistractedRef.current = false;
     episodeLevelRef.current = 0;
     setEnrollmentProgress(0);
@@ -186,12 +213,16 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     setEnrollmentHint("请把摄像头摆在能拍到你脸部、双手与桌面的位置");
     setEnrollmentPoseOk(false);
     enrollmentBadFramesRef.current = 0;
+    handsSkinBaselineRef.current = null;
     enrollmentDeadlineRef.current = null;
     enrollmentTimeoutFiredRef.current = false;
     setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_MINUTES * 60);
     setUserFaceMatched(false);
     setYuriSupervisionEnabled(false);
     yuriSupervisionEnabledRef.current = false;
+    yuriIdleDetectionActiveRef.current = false;
+    setYuriIdleDetectionActive(false);
+    setYuriDistractionBannerVisible(false);
     resetPhoneUseTimers();
     phoneUseActiveRef.current = false;
     setPhoneBestScore(0);
@@ -240,10 +271,14 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       userDescriptorRef.current = averageDescriptors(enrollmentSamplesRef.current);
       setEnrollmentPhase("ready");
       setDetectionStatus("detecting");
-      setEnrollmentHint("人脸采集成功，监督已开始");
+      setEnrollmentHint(
+        isYuriOfficer
+          ? "人脸采集成功，正在播放开场白…"
+          : "人脸采集成功，监督已开始"
+      );
       setEnrollmentPoseOk(true);
     }
-  }, []);
+  }, [isYuriOfficer]);
 
   const computeTargetLevel = useCallback((): DistractionLevel | 0 => {
     const now = Date.now();
@@ -272,46 +307,62 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     []
   );
 
-  const fireDistraction = useCallback((level: DistractionLevel, reason: string) => {
-    if (alreadyDistractedRef.current && level <= (episodeLevelRef.current || 0)) {
-      return;
-    }
-    alreadyDistractedRef.current = true;
-    episodeLevelRef.current = level;
-    onDistractedRef.current?.({
-      level,
-      reason,
-      loopUntilRestore: level === 3,
-    });
-  }, []);
+  const fireDistraction = useCallback(
+    (level: DistractionLevel, reason: string) => {
+      if (isYuriOfficer) {
+        if (alreadyDistractedRef.current) return;
+        alreadyDistractedRef.current = true;
+        episodeLevelRef.current = 1;
+        onDistractedRef.current?.({
+          level: 1,
+          reason,
+          loopUntilRestore: false,
+        });
+        return;
+      }
+      if (alreadyDistractedRef.current && level <= (episodeLevelRef.current || 0)) {
+        return;
+      }
+      alreadyDistractedRef.current = true;
+      episodeLevelRef.current = level;
+      onDistractedRef.current?.({
+        level,
+        reason,
+        loopUntilRestore: level === 3,
+      });
+    },
+    [isYuriOfficer]
+  );
+
+  const resolveHandsInWorkspace = useCallback(
+    (
+      video: HTMLVideoElement,
+      faceBox: { x: number; y: number; width: number; height: number } | null
+    ) => {
+      if (!faceBox) return false;
+      const skinRatio = measureWorkspaceSkinRatio(video, faceBox);
+      return handsLikelyInWorkspace(skinRatio, handsSkinBaselineRef.current);
+    },
+    []
+  );
 
   const processSupervisionFrame = useCallback(
     (
       framing: ReturnType<typeof evaluateEnrollmentPose>,
       phoneUseActive: boolean,
-      userMatched: boolean
+      userMatched: boolean,
+      handsInWorkspace: boolean
     ) => {
-      if (!framing.ok) {
-        if (framingBadSinceRef.current == null) {
-          framingBadSinceRef.current = Date.now();
-        }
-        lastFramingIssueRef.current = framing.issue;
-        setUserFaceMatched(userMatched);
-        if (phoneUseActive) {
-          if (phoneSinceRef.current == null) phoneSinceRef.current = Date.now();
-          setDetectionStatus("phone");
-          restoreFramesRef.current = 0;
-        } else {
-          phoneSinceRef.current = null;
-          setDetectionStatus("framing-bad");
-          restoreFramesRef.current = 0;
-        }
-      } else {
+      const labor = isLaborPose(framing, userMatched, handsInWorkspace);
+
+      if (labor) {
+        laborLostStreakRef.current = 0;
         framingBadSinceRef.current = null;
-        setUserFaceMatched(userMatched);
+        setUserFaceMatched(true);
         if (phoneUseActive) {
           if (phoneSinceRef.current == null) phoneSinceRef.current = Date.now();
           setDetectionStatus("phone");
+          restoreFramesRef.current = 0;
         } else {
           phoneSinceRef.current = null;
           setDetectionStatus("face-ok");
@@ -327,6 +378,33 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           } else {
             restoreFramesRef.current = 0;
           }
+        }
+      } else {
+        laborLostStreakRef.current += 1;
+        if (laborLostStreakRef.current >= LABOR_LOST_CONFIRM_FRAMES) {
+          if (framingBadSinceRef.current == null) {
+            framingBadSinceRef.current = Date.now();
+          }
+          if (!userMatched) {
+            lastFramingIssueRef.current = "no-face";
+          } else if (!framing.ok) {
+            lastFramingIssueRef.current = framing.issue;
+          } else if (!handsInWorkspace) {
+            lastFramingIssueRef.current = "hands-missing";
+          } else {
+            lastFramingIssueRef.current = framing.issue;
+          }
+          setUserFaceMatched(userMatched && framing.ok);
+          if (phoneUseActive) {
+            if (phoneSinceRef.current == null) phoneSinceRef.current = Date.now();
+            setDetectionStatus("phone");
+          } else {
+            phoneSinceRef.current = null;
+            setDetectionStatus("framing-bad");
+          }
+          restoreFramesRef.current = 0;
+        } else {
+          triggerFramesRef.current = 0;
         }
       }
 
@@ -367,7 +445,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         const vh = video.videoHeight;
         const sole = results.length === 1 ? results[0] : null;
         const framing = resolveSupervisionFraming(sole?.detection.box ?? null, vw, vh);
-        processSupervisionFrame(framing, phoneUseActiveRef.current, sole != null);
+        const hands = sole
+          ? resolveHandsInWorkspace(video, sole.detection.box)
+          : false;
+        processSupervisionFrame(
+          framing,
+          phoneUseActiveRef.current,
+          sole != null,
+          hands
+        );
         return;
       } else if (enrollmentPhase === "enrolling" || enrollmentPhase === "pending") {
         setDetectionStatus("enrolling");
@@ -392,6 +478,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           ) {
             enrollmentSamplesRef.current = [];
             enrollmentBadFramesRef.current = 0;
+            handsSkinBaselineRef.current = null;
             setEnrollmentProgress(0);
             setEnrollmentHint(`${pose.hint}（姿势变化，请重新调整）`);
           }
@@ -400,13 +487,20 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
         enrollmentBadFramesRef.current = 0;
         if (results.length === 1) {
+          const box = results[0].detection.box;
+          const skinRatio = measureWorkspaceSkinRatio(video, box);
+          handsSkinBaselineRef.current = Math.max(
+            handsSkinBaselineRef.current ?? 0,
+            skinRatio
+          );
           tryAddEnrollmentSample((results[0] as WithDescriptor).descriptor);
         }
         return;
       } else if (
         enrollmentPhase === "ready" &&
         userDescriptorRef.current &&
-        (!isYuriOfficer || yuriSupervisionEnabledRef.current)
+        (!isYuriOfficer ||
+          (yuriSupervisionEnabledRef.current && yuriIdleDetectionActiveRef.current))
       ) {
         const results = await faceapi
           .detectAllFaces(video, detectorOpts)
@@ -414,24 +508,27 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           .withFaceDescriptors();
 
         const userDesc = userDescriptorRef.current;
-        let userDetection: WithDescriptor | null = null;
-        let bestUserDistance = Infinity;
-        for (const r of results) {
-          const match = matchUserDescriptor(r.descriptor, userDesc);
-          if (match.isUser && match.distance < bestUserDistance) {
-            bestUserDistance = match.distance;
-            userDetection = r as WithDescriptor;
-          }
-        }
+        const picked = pickSupervisionFace(
+          results as WithDescriptor[],
+          userDesc
+        );
 
         const vw = video.videoWidth;
         const vh = video.videoHeight;
         const framing = resolveSupervisionFraming(
-          userDetection?.detection.box ?? null,
+          picked.face?.detection.box ?? null,
           vw,
           vh
         );
-        processSupervisionFrame(framing, phoneUseActiveRef.current, userDetection != null);
+        const hands = picked.face
+          ? resolveHandsInWorkspace(video, picked.face.detection.box)
+          : false;
+        processSupervisionFrame(
+          framing,
+          phoneUseActiveRef.current,
+          picked.userMatched,
+          hands
+        );
       }
     } catch {
       /* 静默跳过 */
@@ -440,6 +537,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     enrollmentPhase,
     isYuriOfficer,
     processSupervisionFrame,
+    resolveHandsInWorkspace,
     tryAddEnrollmentSample,
     useLegacyFaceCount,
   ]);
@@ -449,6 +547,28 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     setYuriSupervisionEnabled(true);
     setEnrollmentHint("开场白结束，监督已开始");
   }, []);
+
+  const handleYuriActiveClipChange = useCallback((clip: YuriActiveClip) => {
+    const active = isYuriBehaviorDetectionClip(clip);
+    yuriIdleDetectionActiveRef.current = active;
+    setYuriIdleDetectionActive(active);
+    if (!active) {
+      phoneUseActiveRef.current = false;
+      resetPhoneUseTimers();
+    }
+  }, []);
+
+  /** 警示片结束：仅重置检测计时，不结束摸鱼回合（alreadyDistracted 须等恢复劳动后才清除） */
+  const handleYuriEnterIdleRecovery = useCallback(() => {
+    episodeLevelRef.current = 0;
+    triggerFramesRef.current = 0;
+    restoreFramesRef.current = 0;
+    laborLostStreakRef.current = 0;
+    framingBadSinceRef.current = null;
+    phoneSinceRef.current = null;
+    resetPhoneUseTimers();
+    onYuriIdleRecoveryStart?.();
+  }, [onYuriIdleRecoveryStart]);
 
   const notifyCameraClosedByUser = useCallback(() => {
     onCameraClosedByUserRef.current?.();
@@ -479,6 +599,9 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
   const startCamera = useCallback(async () => {
     if (cameraActiveRef.current) return;
+    if (isYuriOfficer) {
+      primeUnmutedVideoPlayback(YURI_SUPERVISION_VIDEOS.intro);
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -517,7 +640,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       setCameraActive(false);
       throw error;
     }
-  }, [loadFaceApi, stopCamera]);
+  }, [isYuriOfficer, loadFaceApi, stopCamera]);
 
   useImperativeHandle(
     ref,
@@ -587,7 +710,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   useEffect(() => {
     const supervisionActive =
       (enrollmentPhase === "ready" || useLegacyFaceCount) &&
-      (!isYuriOfficer || yuriSupervisionEnabled);
+      (!isYuriOfficer || (yuriSupervisionEnabled && yuriIdleDetectionActive));
     if (!cameraActive || !modelLoaded || !supervisionActive || !phoneDetectorReady) {
       phoneUseActiveRef.current = false;
       return;
@@ -626,6 +749,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     phoneDetectorReady,
     useLegacyFaceCount,
     yuriSupervisionEnabled,
+    yuriIdleDetectionActive,
   ]);
 
   useEffect(() => {
@@ -641,6 +765,9 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     if (cameraActive) stopCamera({ notifyUser: true });
     else await startCamera();
   };
+
+  const showDistractionBanner =
+    isDistracted && (!isYuriOfficer || yuriDistractionBannerVisible);
 
   const statusLabel = () => {
     if (!cameraActive) return { text: "摄像头未激活", color: "text-stone-400" };
@@ -688,7 +815,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           ? "flex h-full min-h-0 w-full flex-col rounded-none border-0"
           : [
               "comic-border comic-shadow-lg",
-              isDistracted ? "border-rose-600 comic-shadow-red" : "border-[#1C1917]",
+              showDistractionBanner ? "border-rose-600 comic-shadow-red" : "border-[#1C1917]",
             ].join(" "),
       ].join(" ")}
     >
@@ -701,20 +828,23 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         <canvas ref={canvasRef} className="hidden" />
 
         {/* 主画面：监督官视频（专注 / 摸鱼警告） */}
-        <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0 z-0 overflow-hidden bg-black">
           {isYuriOfficer ? (
             <YuriOfficerVideo
-              className="h-full w-full object-contain bg-black"
+              className={OFFICER_MAIN_VIDEO_CLASS}
               enrollmentReady={enrollmentPhase === "ready" || useLegacyFaceCount}
               isDistracted={isDistracted}
-              strikeCount={isDistracted ? Math.max(1, yuriStrikeCount) : 0}
+              strikeCount={yuriStrikeCount}
               onIntroComplete={handleYuriIntroComplete}
               onThirdStrikeComplete={() => onYuriThirdStrikeComplete?.()}
+              onActiveClipChange={handleYuriActiveClipChange}
+              onDistractionBannerChange={setYuriDistractionBannerVisible}
+              onAlertPhaseEnd={handleYuriEnterIdleRecovery}
             />
           ) : (
             <OfficerClipVideo
               key={mainClipKey}
-              className="h-full w-full object-contain bg-black"
+              className={OFFICER_MAIN_VIDEO_CLASS}
               src={mainClip.src}
               startSec={mainClip.startSec}
               durationSec={mainClip.durationSec}
@@ -729,13 +859,13 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         <div
           className={[
             "absolute inset-0 pointer-events-none z-[1]",
-            isDistracted
+            showDistractionBanner
               ? "shadow-[inset_0_0_80px_rgba(239,68,68,0.35)]"
               : "shadow-[inset_0_0_60px_rgba(16,185,129,0.08)]",
           ].join(" ")}
         />
 
-        {isDistracted && (
+        {showDistractionBanner && (
           <div
             className="absolute inset-0 z-[20] flex items-center justify-center p-4 sm:p-6 pointer-events-none"
             role="alert"
@@ -743,7 +873,10 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           >
             <div className="w-full max-w-xl comic-border-2 border-rose-500 bg-rose-950/95 px-5 py-5 sm:px-8 sm:py-7 text-center shadow-[0_8px_0_#1c1917]">
               <p className="font-bangers text-2xl sm:text-3xl md:text-4xl tracking-wide text-rose-300 animate-pulse">
-                摸鱼警报 · {getLevelBannerLabel(distractionLevel)}
+                摸鱼警报 ·{" "}
+                {isYuriOfficer
+                  ? yuriStrikeActionLabel(yuriStrikeCount)
+                  : getLevelBannerLabel(distractionLevel)}
               </p>
               <p className="mt-3 sm:mt-4 text-lg sm:text-xl md:text-2xl font-bold leading-snug text-white">
                 {mockEventText}
@@ -764,21 +897,23 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             <span
               className={[
                 "font-bangers text-sm sm:text-base tracking-wide px-2 py-0.5",
-                isDistracted
+                showDistractionBanner
                   ? "bg-rose-600 text-white animate-pulse"
                   : "bg-emerald-700/90 text-emerald-100",
               ].join(" ")}
             >
               {activeOfficer.name} ·{" "}
-              {isDistracted
-                ? isYuriOfficer
-                  ? `摸鱼 ${Math.min(3, yuriStrikeCount)}/3`
-                  : getLevelBannerLabel(distractionLevel)
-                : isYuriOfficer && !yuriSupervisionEnabled
+              {isYuriOfficer
+                ? !yuriSupervisionEnabled
                   ? "开场白"
+                  : showDistractionBanner
+                    ? yuriStrikeActionLabel(yuriStrikeCount)
+                    : "专注陪伴"
+                : isDistracted
+                  ? getLevelBannerLabel(distractionLevel)
                   : "专注陪伴"}
             </span>
-            {!isDistracted && yuriSupervisionEnabled && (
+            {!showDistractionBanner && !isDistracted && yuriSupervisionEnabled && (
               <span className="text-emerald-400/90 font-mono text-[10px] hidden sm:inline">
                 正常督促中
               </span>
@@ -792,7 +927,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             "absolute z-30 overflow-hidden comic-border-2 bg-stone-950 shadow-[0_4px_0_#1C1917]",
             "right-2 bottom-2 sm:right-3 sm:bottom-3",
             "w-[34%] min-w-[120px] max-w-[240px] aspect-[4/3]",
-            isDistracted ? "border-rose-500" : "border-emerald-600",
+            showDistractionBanner ? "border-rose-500" : "border-emerald-600",
           ].join(" ")}
         >
           <video
@@ -820,7 +955,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
               <span
                 className={[
                   "text-[8px] font-bold px-1 rounded max-w-[70%] truncate",
-                  isDistracted ? "bg-rose-600 text-white" : "bg-black/70 text-emerald-400",
+                  showDistractionBanner ? "bg-rose-600 text-white" : "bg-black/70 text-emerald-400",
                 ].join(" ")}
               >
                 {statusText}
@@ -935,6 +1070,12 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           }}
         />
 
+        {isYuriOfficer && yuriSupervisionEnabled && (
+          <div className="absolute top-2 right-2 z-[36] pointer-events-none">
+            <YuriStrikeStars strikeCount={yuriStrikeCount} />
+          </div>
+        )}
+
         <div
           className="absolute top-2 left-2 right-[38%] sm:right-[260px] flex justify-between items-center text-[10px] font-mono px-2 py-1 bg-black/65 rounded pointer-events-none z-[35]"
         >
@@ -942,7 +1083,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             <span
               className={[
                 "w-2 h-2 rounded-full",
-                isDistracted ? "bg-rose-500 animate-ping" : "bg-emerald-400 animate-pulse",
+                showDistractionBanner ? "bg-rose-500 animate-ping" : "bg-emerald-400 animate-pulse",
               ].join(" ")}
             />
             <span className="text-emerald-400">AI-TRACKER</span>

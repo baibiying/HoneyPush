@@ -8,7 +8,8 @@ export type EnrollmentPoseIssue =
   | "too-close"
   | "face-too-low"
   | "face-too-high"
-  | "off-center";
+  | "off-center"
+  | "hands-missing";
 
 export type EnrollmentPoseResult = {
   ok: boolean;
@@ -18,22 +19,43 @@ export type EnrollmentPoseResult = {
 
 type FaceBox = { x: number; y: number; width: number; height: number };
 
-/** 脸在画面中过小（太远） */
-const MIN_FACE_AREA_RATIO = 0.04;
-/** 脸过大（太近，看不到手与桌面） */
-const MAX_FACE_AREA_RATIO = 0.18;
-/** 脸中心纵向：偏上，为双手桌面留空间 */
-const FACE_CENTER_Y_MIN = 0.18;
-const FACE_CENTER_Y_MAX = 0.42;
-/** 脸的下缘不应超过画面高度比例 */
-const FACE_BOTTOM_MAX_Y_RATIO = 0.52;
-/** 脸中心横向偏移 */
-const FACE_CENTER_X_MAX_OFFSET = 0.22;
+type PoseLimits = {
+  minFaceArea: number;
+  maxFaceArea: number;
+  faceCenterYMin: number;
+  faceCenterYMax: number;
+  faceBottomMaxY: number;
+  faceCenterXMaxOffset: number;
+  minWorkspaceBelowFace: number;
+};
 
-export function evaluateEnrollmentPose(
+const ENROLLMENT_LIMITS: PoseLimits = {
+  minFaceArea: 0.04,
+  maxFaceArea: 0.18,
+  faceCenterYMin: 0.18,
+  faceCenterYMax: 0.42,
+  faceBottomMaxY: 0.52,
+  faceCenterXMaxOffset: 0.22,
+  minWorkspaceBelowFace: 0.38,
+};
+
+/** 监督阶段：与采集相近，略强调脸在上方、下方留白（避免过严误报摸鱼） */
+const SUPERVISION_LIMITS: PoseLimits = {
+  minFaceArea: 0.035,
+  maxFaceArea: 0.19,
+  faceCenterYMin: 0.14,
+  faceCenterYMax: 0.46,
+  faceBottomMaxY: 0.54,
+  faceCenterXMaxOffset: 0.24,
+  minWorkspaceBelowFace: 0.32,
+};
+
+function evaluatePose(
   faces: FaceBox[],
   videoWidth: number,
-  videoHeight: number
+  videoHeight: number,
+  limits: PoseLimits,
+  okHint: string
 ): EnrollmentPoseResult {
   if (videoWidth <= 0 || videoHeight <= 0) {
     return {
@@ -64,9 +86,10 @@ export function evaluateEnrollmentPose(
   const cx = (box.x + box.width / 2) / videoWidth;
   const cy = (box.y + box.height / 2) / videoHeight;
   const bottomY = (box.y + box.height) / videoHeight;
+  const workspaceBelow = 1 - bottomY;
   const centerOffsetX = Math.abs(cx - 0.5);
 
-  if (areaRatio < MIN_FACE_AREA_RATIO) {
+  if (areaRatio < limits.minFaceArea) {
     return {
       ok: false,
       issue: "too-far",
@@ -74,7 +97,7 @@ export function evaluateEnrollmentPose(
     };
   }
 
-  if (areaRatio > MAX_FACE_AREA_RATIO) {
+  if (areaRatio > limits.maxFaceArea) {
     return {
       ok: false,
       issue: "too-close",
@@ -82,7 +105,11 @@ export function evaluateEnrollmentPose(
     };
   }
 
-  if (cy > FACE_CENTER_Y_MAX || bottomY > FACE_BOTTOM_MAX_Y_RATIO) {
+  if (
+    cy > limits.faceCenterYMax ||
+    bottomY > limits.faceBottomMaxY ||
+    workspaceBelow < limits.minWorkspaceBelowFace
+  ) {
     return {
       ok: false,
       issue: "face-too-low",
@@ -90,7 +117,7 @@ export function evaluateEnrollmentPose(
     };
   }
 
-  if (cy < FACE_CENTER_Y_MIN) {
+  if (cy < limits.faceCenterYMin) {
     return {
       ok: false,
       issue: "face-too-high",
@@ -98,7 +125,7 @@ export function evaluateEnrollmentPose(
     };
   }
 
-  if (centerOffsetX > FACE_CENTER_X_MAX_OFFSET) {
+  if (centerOffsetX > limits.faceCenterXMaxOffset) {
     return {
       ok: false,
       issue: "off-center",
@@ -109,6 +136,44 @@ export function evaluateEnrollmentPose(
   return {
     ok: true,
     issue: "ok",
-    hint: "姿势正确，请保持不动，正在采集…",
+    hint: okHint,
   };
+}
+
+export function evaluateEnrollmentPose(
+  faces: FaceBox[],
+  videoWidth: number,
+  videoHeight: number
+): EnrollmentPoseResult {
+  return evaluatePose(
+    faces,
+    videoWidth,
+    videoHeight,
+    ENROLLMENT_LIMITS,
+    "姿势正确，请保持不动，正在采集…"
+  );
+}
+
+/** 监督中判定「劳动」构图（脸 + 双手 + 桌面均在镜头内，由脸框与下方留白近似） */
+export function evaluateSupervisionPose(
+  faces: FaceBox[],
+  videoWidth: number,
+  videoHeight: number
+): EnrollmentPoseResult {
+  return evaluatePose(
+    faces,
+    videoWidth,
+    videoHeight,
+    SUPERVISION_LIMITS,
+    "构图符合要求：脸部、双手与桌面均在画面中"
+  );
+}
+
+/** 本人匹配、构图合格且双手在工作区内才算劳动 */
+export function isLaborPose(
+  framing: EnrollmentPoseResult,
+  userMatched: boolean,
+  handsInWorkspace: boolean
+) {
+  return framing.ok && userMatched && handsInWorkspace;
 }

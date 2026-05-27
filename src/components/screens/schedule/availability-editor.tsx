@@ -209,7 +209,7 @@ function DayTimelineCard({
         role="presentation"
         onPointerDown={handleTrackPointerDown}
         className={[
-          "relative h-16 sm:h-[4.5rem] rounded-xl border-2 border-[#1C1917]/40 bg-black/30 overflow-visible cursor-crosshair touch-none",
+          "relative h-20 sm:h-24 rounded-xl border-2 border-[#1C1917]/40 bg-black/30 overflow-visible cursor-crosshair touch-none",
           dragging ? "select-none" : "",
         ].join(" ")}
       >
@@ -240,7 +240,7 @@ function DayTimelineCard({
               key={slot.id}
               data-slot-block
               className={[
-                "absolute top-2 bottom-5 min-w-[2rem] rounded-lg border-2 border-[#1C1917]",
+                "absolute top-1.5 bottom-6 min-w-[2.5rem] rounded-lg border-2 border-[#1C1917]",
                 "bg-gradient-to-b from-amber-300 via-amber-400 to-orange-500",
                 isSelected ? "ring-2 ring-amber-200 z-10 comic-shadow-sm" : "z-[1]",
               ].join(" ")}
@@ -261,7 +261,7 @@ function DayTimelineCard({
                 }}
                 className="absolute inset-x-2.5 sm:inset-x-3 top-0 bottom-0 flex items-center justify-center overflow-hidden"
               >
-                <span className="text-[9px] sm:text-[10px] font-black text-[#1C1917] truncate pointer-events-none">
+                <span className="px-0.5 text-base sm:text-xl md:text-2xl font-bangers font-bold leading-none tracking-wide text-[#1C1917] truncate pointer-events-none drop-shadow-[0_1px_0_rgba(255,255,255,0.35)]">
                   {slot.startTime.slice(0, 5)}–{slot.endTime.slice(0, 5)}
                 </span>
               </button>

@@ -30,6 +30,8 @@ import {
   exitSupervisionFullscreen,
   requestSupervisionFullscreen,
 } from "@/lib/supervision-fullscreen";
+import { primeUnmutedVideoPlayback } from "@/lib/unlock-browser-audio";
+import { YURI_SUPERVISION_VIDEOS } from "@/lib/officers/yuri-supervision-videos";
 
 type LogEntry = { time: string; text: string; type: "normal" | "warning" | "success" };
 type Task = {
@@ -155,7 +157,10 @@ export function MonitorScreen() {
   }, []);
 
   const launchSupervisionWithOfficer = useCallback(
-    async (officerId: OfficerId, task: { id: number; text: string }) => {
+    (officerId: OfficerId, task: { id: number; text: string }) => {
+      if (officerId === "yuri") {
+        primeUnmutedVideoPlayback(YURI_SUPERVISION_VIDEOS.intro);
+      }
       setCurrentOfficerId(officerId);
       setShowOfficerModal(false);
       const officer = OFFICERS.find((o) => o.id === officerId);
@@ -456,20 +461,16 @@ export function MonitorScreen() {
       setMockEventText(event.reason);
 
       if (currentOfficerId === "yuri") {
-        if (!distractionCountedRef.current) {
-          distractionCountedRef.current = true;
-          setDistractionCount((c) => {
-            const next = c + 1;
-            setDistractionLevel(Math.min(3, next) as DistractionLevel);
-            playBeep();
-            const labels = ["警示", "掏枪", "开枪"];
-            addLog(
-              `第 ${next} 次摸鱼 · 尤里教官播放「${labels[next - 1] ?? "开枪"}」`,
-              "warning"
-            );
-            return next;
-          });
-        }
+        setDistractionCount((c) => {
+          const next = Math.min(3, c + 1);
+          playBeep();
+          const labels = ["警示", "掏枪", "开枪"];
+          addLog(
+            `第 ${next} 次摸鱼 · 尤里教官播放「${labels[next - 1] ?? "开枪"}」`,
+            "warning"
+          );
+          return next;
+        });
         return;
       }
 
@@ -531,6 +532,10 @@ export function MonitorScreen() {
       onEnrollmentTimeout={handleEnrollmentTimeout}
       yuriStrikeCount={distractionCount}
       onYuriThirdStrikeComplete={handleYuriThirdStrikeComplete}
+      onYuriIdleRecoveryStart={() => {
+        setIsDistracted(false);
+        setMockEventText("请保持脸部、双手与桌面在画面中");
+      }}
       fillViewport
     />
   );
