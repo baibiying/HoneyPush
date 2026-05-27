@@ -95,6 +95,8 @@ interface CrtMonitorProps {
   yuriStrikeCount?: number;
   /** 尤里：摸鱼警示播完进入 idle 检测（清除摸鱼 UI，保留扣星） */
   onYuriIdleRecoveryStart?: () => void;
+  /** 段间休息时暂停摸鱼检测 */
+  behaviorDetectionPaused?: boolean;
   fillViewport?: boolean;
 }
 
@@ -125,6 +127,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     onYuriThirdStrikeComplete,
     yuriStrikeCount = 0,
     onYuriIdleRecoveryStart,
+    behaviorDetectionPaused = false,
     fillViewport = false,
   },
   ref
@@ -500,7 +503,9 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         enrollmentPhase === "ready" &&
         userDescriptorRef.current &&
         (!isYuriOfficer ||
-          (yuriSupervisionEnabledRef.current && yuriIdleDetectionActiveRef.current))
+          (yuriSupervisionEnabledRef.current &&
+            yuriIdleDetectionActiveRef.current &&
+            !behaviorDetectionPaused))
       ) {
         const results = await faceapi
           .detectAllFaces(video, detectorOpts)
@@ -540,6 +545,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     resolveHandsInWorkspace,
     tryAddEnrollmentSample,
     useLegacyFaceCount,
+    behaviorDetectionPaused,
   ]);
 
   const handleYuriIntroComplete = useCallback(() => {
@@ -710,6 +716,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   useEffect(() => {
     const supervisionActive =
       (enrollmentPhase === "ready" || useLegacyFaceCount) &&
+      !behaviorDetectionPaused &&
       (!isYuriOfficer || (yuriSupervisionEnabled && yuriIdleDetectionActive));
     if (!cameraActive || !modelLoaded || !supervisionActive || !phoneDetectorReady) {
       phoneUseActiveRef.current = false;
@@ -750,6 +757,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     useLegacyFaceCount,
     yuriSupervisionEnabled,
     yuriIdleDetectionActive,
+    behaviorDetectionPaused,
   ]);
 
   useEffect(() => {
