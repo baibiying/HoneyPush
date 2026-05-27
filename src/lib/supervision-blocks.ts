@@ -8,6 +8,15 @@ import {
 /** 尤里监督：每段专注最多 3 颗星，扣完即本 block 失败 */
 export const SUPERVISION_MAX_STRIKES = 3;
 
+/**
+ * 监督专注单段时长（分钟）。
+ * TODO(测试)：验收任务成功流程后改回 25，与 `POMODORO_FOCUS_MINUTES` 对齐。
+ */
+export const SUPERVISION_FOCUS_BLOCK_MINUTES = 1;
+
+/** 监督段间休息时长（秒）；验收后改回 `POMODORO_BREAK_MINUTES * 60` */
+export const SUPERVISION_BREAK_SECONDS = 30;
+
 export type SupervisionFocusBlock = {
   blockIndex: number;
   startAt: string;
@@ -35,10 +44,36 @@ export function resolveSupervisionFocusBlocks(
   });
 
   if (segments.length > 0) {
-    return segments.map(segmentToBlock);
+    return withSupervisionFocusDuration(segments.map(segmentToBlock));
   }
 
   return buildSyntheticFocusBlocks(task.durationMinutes, now);
+}
+
+/** 将每段专注压缩为测试时长，并重排后续段的开始时间 */
+function withSupervisionFocusDuration(
+  blocks: SupervisionFocusBlock[]
+): SupervisionFocusBlock[] {
+  if (blocks.length === 0) return blocks;
+
+  const focusMs = Math.max(1, SUPERVISION_FOCUS_BLOCK_MINUTES) * 60 * 1000;
+  const breakMs = Math.max(0, SUPERVISION_BREAK_SECONDS) * 1000;
+
+  let cursor = new Date(blocks[0].startAt).getTime();
+  if (Number.isNaN(cursor)) cursor = Date.now();
+
+  return blocks.map((block, index) => {
+    const startAt = new Date(cursor).toISOString();
+    cursor += focusMs;
+    const endAt = new Date(cursor).toISOString();
+    if (index < blocks.length - 1) cursor += breakMs;
+
+    return {
+      ...block,
+      startAt,
+      endAt,
+    };
+  });
 }
 
 function segmentToBlock(segment: TaskFocusSegment): SupervisionFocusBlock {
@@ -73,17 +108,22 @@ function buildSyntheticFocusBlocks(
     blockIndex += 1;
   }
 
-  if (blocks.length > 0) return blocks;
+  if (blocks.length > 0) {
+    return withSupervisionFocusDuration(blocks);
+  }
 
-  const mins = Math.max(1, Math.min(POMODORO_FOCUS_MINUTES, Math.round(durationMinutes)));
+  const mins = Math.max(
+    1,
+    Math.min(SUPERVISION_FOCUS_BLOCK_MINUTES, Math.round(durationMinutes))
+  );
   const end = now.getTime() + mins * 60 * 1000;
-  return [
+  return withSupervisionFocusDuration([
     {
       blockIndex: 0,
       startAt: now.toISOString(),
       endAt: new Date(end).toISOString(),
     },
-  ];
+  ]);
 }
 
 export function getBlockSecondsRemaining(

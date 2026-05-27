@@ -18,6 +18,8 @@ export type SupervisionOutcomeStats = {
   currentBlockNumber: number;
   /** 本段摸鱼次数 */
   distractionsInBlock: number;
+  /** 第 1 段至当前段累计摸鱼次数 */
+  distractionsCumulative: number;
   totalDistractions: number;
   starsRemaining: number;
   /** 摸鱼明细（含原因与所属段） */
@@ -114,8 +116,11 @@ export function buildOutcomeStats(params: {
   totalCoins?: number;
   totalSessions?: number;
 }): SupervisionOutcomeStats {
-  const distractionsInBlock = params.distractions.filter(
+  const strikesInCurrentBlock = params.distractions.filter(
     (d) => d.blockNumber === params.currentBlockNumber
+  ).length;
+  const distractionsCumulative = params.distractions.filter(
+    (d) => d.blockNumber <= params.currentBlockNumber
   ).length;
 
   return {
@@ -124,9 +129,10 @@ export function buildOutcomeStats(params: {
     totalBlocks: params.totalBlocks,
     completedBlocks: params.completedBlocks,
     currentBlockNumber: params.currentBlockNumber,
-    distractionsInBlock,
+    distractionsInBlock: strikesInCurrentBlock,
+    distractionsCumulative,
     totalDistractions: params.totalDistractions,
-    starsRemaining: Math.max(0, SUPERVISION_MAX_STRIKES - distractionsInBlock),
+    starsRemaining: Math.max(0, SUPERVISION_MAX_STRIKES - strikesInCurrentBlock),
     distractions: params.distractions,
     coinsEarned: params.coinsEarned,
     totalCoins: params.totalCoins,

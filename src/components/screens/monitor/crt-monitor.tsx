@@ -16,6 +16,7 @@ import {
 } from "@/lib/officers-data";
 import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-video";
 import { YuriOfficerVideo } from "@/components/screens/monitor/yuri-officer-video";
+import { SupervisionFocusTimer } from "@/components/screens/monitor/supervision-focus-timer";
 import { YuriStrikeStars } from "@/components/screens/monitor/yuri-strike-stars";
 import {
   primeUnmutedVideoPlayback,
@@ -32,8 +33,8 @@ import { evaluateEnrollmentPose } from "@/lib/face-tracking/enrollment-pose";
 import {
   ENROLLMENT_POSE_RESET_FRAMES,
   ENROLLMENT_TARGET_SAMPLES,
-  ENROLLMENT_TIMEOUT_MINUTES,
   ENROLLMENT_TIMEOUT_MS,
+  ENROLLMENT_TIMEOUT_SECONDS,
   FRAMING_L1_SEC,
   FRAMING_L2_SEC,
   FRAMING_L3_LONG_SEC,
@@ -70,6 +71,9 @@ import type {
 export type CrtMonitorHandle = {
   startCamera: () => Promise<void>;
   stopCamera: () => void;
+  isCameraActive: () => boolean;
+  /** 新一段专注开始前重新人脸采集（超时未完成则本段失败） */
+  restartEnrollmentForBlock: () => void;
 };
 
 interface CrtMonitorProps {
@@ -85,6 +89,10 @@ interface CrtMonitorProps {
   onCameraClosedByUser?: () => void;
   /** 采集超时未完成 */
   onEnrollmentTimeout?: () => void;
+  /** 采集完成，可开始本段专注计时 */
+  onEnrollmentReady?: () => void;
+  /** 采集失败（如模型加载失败） */
+  onEnrollmentFailed?: (reason: string) => void;
   /** 尤里教官：累计第三次摸鱼「开枪」片段结束 */
   onYuriThirdStrikeComplete?: () => void;
   /** 尤里教官：当前摸鱼次数（1～3） */
@@ -94,6 +102,12 @@ interface CrtMonitorProps {
   /** 段间休息时暂停摸鱼检测 */
   behaviorDetectionPaused?: boolean;
   fillViewport?: boolean;
+  /** 本段专注倒计时（剩余 / 已专注） */
+  focusTimer?: {
+    totalSeconds: number;
+    remainingSeconds: number;
+    blockLabel?: string;
+  };
 }
 
 type FaceApiModule = typeof import("face-api.js");
@@ -120,11 +134,14 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     onFaceRestored,
     onCameraClosedByUser,
     onEnrollmentTimeout,
+    onEnrollmentReady,
+    onEnrollmentFailed,
     onYuriThirdStrikeComplete,
     yuriStrikeCount = 0,
     onYuriIdleRecoveryStart,
     behaviorDetectionPaused = false,
     fillViewport = false,
+    focusTimer,
   },
   ref
 ) {
@@ -137,7 +154,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   );
   const [enrollmentPoseOk, setEnrollmentPoseOk] = useState(false);
   const [enrollmentTimeLeftSec, setEnrollmentTimeLeftSec] = useState(
-    ENROLLMENT_TIMEOUT_MINUTES * 60
+    ENROLLMENT_TIMEOUT_SECONDS
   );
   const [useLegacyFaceCount, setUseLegacyFaceCount] = useState(false);
   const [phoneModelsLoading, setPhoneModelsLoading] = useState(false);
@@ -152,12 +169,16 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   const onDistractedRef = useRef(onDistracted);
   const onFaceRestoredRef = useRef(onFaceRestored);
   const onEnrollmentTimeoutRef = useRef(onEnrollmentTimeout);
+  const onEnrollmentReadyRef = useRef(onEnrollmentReady);
+  const onEnrollmentFailedRef = useRef(onEnrollmentFailed);
   const enrollmentDeadlineRef = useRef<number | null>(null);
   const enrollmentTimeoutFiredRef = useRef(false);
   onCameraClosedByUserRef.current = onCameraClosedByUser;
   onDistractedRef.current = onDistracted;
   onFaceRestoredRef.current = onFaceRestored;
   onEnrollmentTimeoutRef.current = onEnrollmentTimeout;
+  onEnrollmentReadyRef.current = onEnrollmentReady;
+  onEnrollmentFailedRef.current = onEnrollmentFailed;
 
   const [detectionStatus, setDetectionStatus] = useState<TrackerDetectionStatus>("idle");
   const [modelLoaded, setModelLoaded] = useState(false);
@@ -215,7 +236,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     handsSkinBaselineRef.current = null;
     enrollmentDeadlineRef.current = null;
     enrollmentTimeoutFiredRef.current = false;
-    setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_MINUTES * 60);
+    setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_SECONDS);
     setUserFaceMatched(false);
     setYuriSupervisionEnabled(false);
     yuriSupervisionEnabledRef.current = false;
@@ -235,6 +256,41 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     enrollmentTimeoutFiredRef.current = true;
     onEnrollmentTimeoutRef.current?.();
   }, []);
+
+  const notifyEnrollmentReady = useCallback(() => {
+    onEnrollmentReadyRef.current?.();
+  }, []);
+
+  const beginEnrollmentForBlock = useCallback(() => {
+    if (!recognitionReadyRef.current) {
+      setEnrollmentPhase("ready");
+      setDetectionStatus("detecting");
+      notifyEnrollmentReady();
+      return;
+    }
+
+    userDescriptorRef.current = null;
+    enrollmentSamplesRef.current = [];
+    enrollmentBadFramesRef.current = 0;
+    handsSkinBaselineRef.current = null;
+    enrollmentDeadlineRef.current = Date.now() + ENROLLMENT_TIMEOUT_MS;
+    enrollmentTimeoutFiredRef.current = false;
+    setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_SECONDS);
+    setEnrollmentProgress(0);
+    setEnrollmentPoseOk(false);
+    setEnrollmentPhase("enrolling");
+    setDetectionStatus("enrolling");
+    setEnrollmentHint("请把摄像头摆在能拍到你脸部、双手与桌面的位置");
+    setUserFaceMatched(false);
+
+    if (isYuriOfficer) {
+      yuriSupervisionEnabledRef.current = false;
+      setYuriSupervisionEnabled(false);
+      yuriIdleDetectionActiveRef.current = false;
+      setYuriIdleDetectionActive(false);
+      setYuriDistractionBannerVisible(false);
+    }
+  }, [isYuriOfficer, notifyEnrollmentReady]);
 
   const loadFaceApi = useCallback(async () => {
     if (faceApiRef.current) return true;
@@ -258,6 +314,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     } catch (e) {
       console.error("[face-api] 模型加载失败:", e);
       setEnrollmentPhase("failed");
+      onEnrollmentFailedRef.current?.("AI 人脸模型加载失败，无法采集");
       return false;
     }
   }, []);
@@ -276,8 +333,9 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           : "人脸采集成功，监督已开始"
       );
       setEnrollmentPoseOk(true);
+      notifyEnrollmentReady();
     }
-  }, [isYuriOfficer]);
+  }, [isYuriOfficer, notifyEnrollmentReady]);
 
   const computeTargetLevel = useCallback((): DistractionLevel | 0 => {
     const now = Date.now();
@@ -629,12 +687,13 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       if (ok && recognitionReadyRef.current) {
         enrollmentDeadlineRef.current = Date.now() + ENROLLMENT_TIMEOUT_MS;
         enrollmentTimeoutFiredRef.current = false;
-        setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_MINUTES * 60);
+        setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_SECONDS);
         setEnrollmentPhase("enrolling");
         setDetectionStatus("enrolling");
       } else if (ok) {
         setEnrollmentPhase("ready");
         setDetectionStatus("detecting");
+        notifyEnrollmentReady();
       }
     } catch (error) {
       alert(`摄像头启动失败：${error instanceof Error ? error.message : "未知错误"}`);
@@ -642,7 +701,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       setCameraActive(false);
       throw error;
     }
-  }, [isYuriOfficer, loadFaceApi, stopCamera]);
+  }, [isYuriOfficer, loadFaceApi, notifyEnrollmentReady, stopCamera]);
 
   useImperativeHandle(
     ref,
@@ -653,8 +712,10 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         stopCamera({ notifyUser: false });
         suppressCloseNotifyRef.current = false;
       },
+      isCameraActive: () => cameraActiveRef.current,
+      restartEnrollmentForBlock: beginEnrollmentForBlock,
     }),
-    [startCamera, stopCamera]
+    [beginEnrollmentForBlock, startCamera, stopCamera]
   );
 
   useEffect(() => {
@@ -1086,8 +1147,23 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           </div>
         )}
 
+        {focusTimer && focusTimer.totalSeconds > 0 && (
+          <div className="absolute top-12 left-2 z-[36] pointer-events-none sm:top-14 md:top-16">
+            <SupervisionFocusTimer
+              totalSeconds={focusTimer.totalSeconds}
+              remainingSeconds={focusTimer.remainingSeconds}
+              blockLabel={focusTimer.blockLabel}
+            />
+          </div>
+        )}
+
         <div
-          className="absolute top-2 left-2 right-[38%] sm:right-[260px] flex justify-between items-center text-[10px] font-mono px-2 py-1 bg-black/65 rounded pointer-events-none z-[35]"
+          className={[
+            "absolute top-2 left-2 flex justify-between items-center text-[10px] font-mono px-2 py-1 bg-black/65 rounded pointer-events-none z-[35]",
+            focusTimer && focusTimer.totalSeconds > 0
+              ? "right-[44%] sm:right-[300px] md:right-[340px]"
+              : "right-[38%] sm:right-[260px]",
+          ].join(" ")}
         >
           <div className="flex items-center gap-1.5">
             <span

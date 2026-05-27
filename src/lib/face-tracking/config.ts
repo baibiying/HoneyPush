@@ -10,9 +10,18 @@ export const ENROLLMENT_MAX_CENTER_OFFSET_RATIO = 0.28;
 /** 姿势不对连续 N 帧则清空已采样本 */
 export const ENROLLMENT_POSE_RESET_FRAMES = 3;
 
-/** 自进入采集起超过该时长仍未成功 → 任务执行失败 */
-export const ENROLLMENT_TIMEOUT_MS = 3 * 60 * 1000;
+/** 自进入采集起超过该时长仍未成功 → 本段专注失败 */
+export const ENROLLMENT_TIMEOUT_SECONDS = 3 * 60;
+export const ENROLLMENT_TIMEOUT_MS = ENROLLMENT_TIMEOUT_SECONDS * 1000;
 export const ENROLLMENT_TIMEOUT_MINUTES = ENROLLMENT_TIMEOUT_MS / 60_000;
+
+export function formatEnrollmentTimeoutLabel(): string {
+  if (ENROLLMENT_TIMEOUT_SECONDS >= 60) {
+    const minutes = Math.round(ENROLLMENT_TIMEOUT_SECONDS / 60);
+    return `${minutes} 分钟`;
+  }
+  return `${ENROLLMENT_TIMEOUT_SECONDS} 秒`;
+}
 
 export const TRIGGER_CONFIRM_FRAMES = 3;
 /** 连续劳动帧数达到后视为恢复（尤里等监督：恢复后才能开始下一次摸鱼计数） */

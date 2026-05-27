@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { AnimatePresence } from "framer-motion";
 import { OFFICERS, type OfficerId } from "@/lib/officers-data";
-import { POMODORO_FOCUS_MINUTES } from "@/lib/ai/schedule-times";
-import { ENROLLMENT_TIMEOUT_MINUTES } from "@/lib/face-tracking/config";
+import {
+  ENROLLMENT_TIMEOUT_MS,
+  formatEnrollmentTimeoutLabel,
+} from "@/lib/face-tracking/config";
 import type { DistractionEvent, DistractionLevel } from "@/lib/face-tracking/types";
 import { readPreferredOfficer, setPreferredOfficer } from "@/lib/preferred-officer";
 import { clearStashedExecuteTask, readStashedExecuteTaskId } from "@/lib/execute-task-flow";
@@ -36,6 +39,7 @@ import {
   isSupervisionBlockFailed,
   isSupervisionBlockSucceeded,
   resolveSupervisionFocusBlocks,
+  SUPERVISION_FOCUS_BLOCK_MINUTES,
   type SupervisionFocusBlock,
 } from "@/lib/supervision-blocks";
 import {
@@ -65,7 +69,7 @@ type Task = {
   scheduledFocusSegments?: Array<{ startAt: string; endAt: string }> | null;
 };
 
-const DEFAULT_FOCUS_SECONDS = 25 * 60;
+const DEFAULT_FOCUS_SECONDS = SUPERVISION_FOCUS_BLOCK_MINUTES * 60;
 
 function getNowStr() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -121,6 +125,8 @@ export function MonitorScreen() {
   const [focusSeconds, setFocusSeconds] = useState(DEFAULT_FOCUS_SECONDS);
   const [timer, setTimer] = useState(DEFAULT_FOCUS_SECONDS);
   const [timerRunning, setTimerRunning] = useState(false);
+  /** 本段人脸采集完成后才开始专注倒计时 */
+  const [blockEnrollmentReady, setBlockEnrollmentReady] = useState(false);
   const [isDistracted, setIsDistracted] = useState(false);
   const [distractionLevel, setDistractionLevel] = useState<DistractionLevel>(1);
   const [mockEventText, setMockEventText] = useState("一切正常");
@@ -167,6 +173,9 @@ export function MonitorScreen() {
     nextBlockStartLabel: string;
   } | null>(null);
   const breakPhaseRef = useRef(false);
+  /** 本段采集截止（与是否已开摄像头无关） */
+  const enrollmentGateDeadlineRef = useRef<number | null>(null);
+  const enrollmentGateHandledRef = useRef(false);
   const [focusBlocks, setFocusBlocks] = useState<SupervisionFocusBlock[]>([]);
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
   const activeOfficer = OFFICERS.find((o) => o.id === currentOfficerId) ?? OFFICERS[0];
@@ -239,7 +248,20 @@ export function MonitorScreen() {
         `🎯 ${formatBlockLabel(blockIndex, blocks.length)}：${taskText}（本段 ${Math.ceil(seconds / 60)} 分钟）`,
         "normal"
       );
-      setTimerRunning(true);
+      setBlockEnrollmentReady(false);
+      setTimerRunning(false);
+      enrollmentGateHandledRef.current = false;
+      enrollmentGateDeadlineRef.current = Date.now() + ENROLLMENT_TIMEOUT_MS;
+      addLog(
+        `请在 ${formatEnrollmentTimeoutLabel()}内开启摄像头并完成人脸采集，否则本段失败`,
+        "warning"
+      );
+
+      queueMicrotask(() => {
+        if (crtRef.current?.isCameraActive()) {
+          crtRef.current.restartEnrollmentForBlock();
+        }
+      });
     },
     [addLog]
   );
@@ -260,7 +282,7 @@ export function MonitorScreen() {
         ? resolveSupervisionFocusBlocks(fullTask)
         : resolveSupervisionFocusBlocks({
             id: task.id,
-            durationMinutes: 25,
+            durationMinutes: SUPERVISION_FOCUS_BLOCK_MINUTES,
           });
 
       if (blocks.length === 0) {
@@ -355,6 +377,7 @@ export function MonitorScreen() {
     setTimerRunning(false);
     setDistractionCount(0);
     distractionCountRef.current = 0;
+    setBlockEnrollmentReady(false);
     setDistractionPlayKey(0);
     setIsDistracted(false);
     setMockEventText("一切正常");
@@ -367,6 +390,8 @@ export function MonitorScreen() {
     breakPhaseRef.current = false;
     blockDistractionsRef.current = [];
     taskDistractionsRef.current = [];
+    enrollmentGateDeadlineRef.current = null;
+    enrollmentGateHandledRef.current = false;
   }, []);
 
   const recordDistractionStrike = useCallback(
@@ -391,22 +416,31 @@ export function MonitorScreen() {
       completedBlocks: number,
       blockIndex: number,
       record?: { coinsEarned?: number; totalCoins?: number; totalSessions?: number },
-      options?: { scope?: "block" | "task" }
+      options?: { scope?: "block" | "task" | "through-current-block" }
     ) => {
-      const useBlockScope = options?.scope === "block";
-      const distractions = useBlockScope
-        ? [...blockDistractionsRef.current]
-        : [...taskDistractionsRef.current];
-      const totalDistractions = useBlockScope
-        ? blockDistractionsRef.current.length
-        : totalDistractionsRef.current;
+      const throughBlockNumber = blockIndex + 1;
+      let distractions: DistractionStrikeRecord[];
+      let totalDistractions: number;
+
+      if (options?.scope === "block") {
+        distractions = [...blockDistractionsRef.current];
+        totalDistractions = blockDistractionsRef.current.length;
+      } else if (options?.scope === "through-current-block") {
+        distractions = taskDistractionsRef.current.filter(
+          (d) => d.blockNumber <= throughBlockNumber
+        );
+        totalDistractions = distractions.length;
+      } else {
+        distractions = [...taskDistractionsRef.current];
+        totalDistractions = totalDistractionsRef.current;
+      }
 
       return buildOutcomeStats({
         taskText: run.taskText,
         officerName: activeOfficer.name,
         totalBlocks: run.focusBlocks?.length ?? totalFocusBlocks,
         completedBlocks,
-        currentBlockNumber: blockIndex + 1,
+        currentBlockNumber: throughBlockNumber,
         distractions,
         totalDistractions,
         coinsEarned: record?.coinsEarned,
@@ -454,7 +488,7 @@ export function MonitorScreen() {
           taskId: run.taskId,
           officerId,
           distractionCount: totalDistractionsRef.current,
-          durationMinutes: POMODORO_FOCUS_MINUTES,
+          durationMinutes: SUPERVISION_FOCUS_BLOCK_MINUTES,
         });
 
         stopSupervisionMedia();
@@ -478,7 +512,7 @@ export function MonitorScreen() {
               totalCoins: record.data?.stats?.totalCoins,
               totalSessions: record.data?.stats?.totalSessions,
             },
-            { scope: "block" }
+            { scope: "through-current-block" }
           ),
         });
       } finally {
@@ -495,14 +529,6 @@ export function MonitorScreen() {
     ]
   );
 
-  const abortSupervisionRun = useCallback(
-    async (reason: string) => {
-      await failCurrentBlock(reason);
-      return true;
-    },
-    [failCurrentBlock]
-  );
-
   const handleCameraClosedByUser = useCallback(() => {
     const run = readSupervisionRun();
     if (!run?.launched) return;
@@ -512,11 +538,78 @@ export function MonitorScreen() {
     failCurrentBlock("手动关闭摄像头，监督中断");
   }, [failCurrentBlock]);
 
-  const handleEnrollmentTimeout = useCallback(() => {
-    void abortSupervisionRun(
-      `人脸采集超时（${ENROLLMENT_TIMEOUT_MINUTES} 分钟未完成）`
+  const handleEnrollmentReady = useCallback(() => {
+    const run = readSupervisionRun();
+    if (!run?.launched || breakPhaseRef.current) return;
+    if (enrollmentGateHandledRef.current) return;
+
+    const blocks = focusBlocks.length > 0 ? focusBlocks : run.focusBlocks ?? [];
+    const blockIndex = currentBlockIndex;
+    const block = blocks[blockIndex];
+    if (!block) return;
+
+    enrollmentGateHandledRef.current = true;
+    enrollmentGateDeadlineRef.current = null;
+
+    const seconds = Math.max(1, getBlockSecondsRemaining(block));
+    setFocusSeconds(seconds);
+    setTimer(seconds);
+    setBlockEnrollmentReady(true);
+    setTimerRunning(true);
+    addLog(
+      `人脸采集完成，${formatBlockLabel(blockIndex, blocks.length)} 专注计时开始（${Math.ceil(seconds / 60)} 分钟）`,
+      "success"
     );
-  }, [abortSupervisionRun]);
+  }, [addLog, currentBlockIndex, focusBlocks]);
+
+  const handleEnrollmentTimeout = useCallback(() => {
+    if (enrollmentGateHandledRef.current) return;
+    const run = readSupervisionRun();
+    if (!run?.launched || breakPhaseRef.current) return;
+
+    enrollmentGateHandledRef.current = true;
+    enrollmentGateDeadlineRef.current = null;
+    setBlockEnrollmentReady(false);
+    setTimerRunning(false);
+    void failCurrentBlock(
+      `人脸采集超时（${formatEnrollmentTimeoutLabel()}内未完成，本段专注失败）`
+    );
+  }, [failCurrentBlock]);
+
+  const handleEnrollmentTimeoutRef = useRef(handleEnrollmentTimeout);
+  handleEnrollmentTimeoutRef.current = handleEnrollmentTimeout;
+
+  useEffect(() => {
+    if (blockEnrollmentReady || breakPhase) return;
+    const run = readSupervisionRun();
+    if (!run?.launched) return;
+
+    const tick = () => {
+      const deadline = enrollmentGateDeadlineRef.current;
+      if (!deadline || enrollmentGateHandledRef.current) return;
+      if (Date.now() >= deadline) {
+        handleEnrollmentTimeoutRef.current();
+      }
+    };
+
+    tick();
+    const id = window.setInterval(tick, 500);
+    return () => window.clearInterval(id);
+  }, [blockEnrollmentReady, breakPhase]);
+
+  const handleEnrollmentFailed = useCallback(
+    (reason: string) => {
+      if (enrollmentGateHandledRef.current) return;
+      const run = readSupervisionRun();
+      if (!run?.launched || breakPhaseRef.current) return;
+      enrollmentGateHandledRef.current = true;
+      enrollmentGateDeadlineRef.current = null;
+      setBlockEnrollmentReady(false);
+      setTimerRunning(false);
+      void failCurrentBlock(`人脸采集失败：${reason}`);
+    },
+    [failCurrentBlock]
+  );
 
   const handleSupervisionModalClose = useCallback(() => {
     const run = readSupervisionRun();
@@ -640,7 +733,7 @@ export function MonitorScreen() {
       officerId: currentOfficerId,
       distractionCount: totalDistractionsRef.current,
       taskId: run.taskId,
-      durationMinutes: POMODORO_FOCUS_MINUTES,
+      durationMinutes: SUPERVISION_FOCUS_BLOCK_MINUTES,
     });
 
     stopSupervisionMedia();
@@ -734,7 +827,9 @@ export function MonitorScreen() {
     };
     setOutcomeModal({
       kind: "block-success",
-      stats: buildCurrentOutcomeStats(run, completed.length, currentBlockIndex),
+      stats: buildCurrentOutcomeStats(run, completed.length, currentBlockIndex, undefined, {
+        scope: "through-current-block",
+      }),
       breakSecondsUntilNext,
       nextBlockLabel: formatBlockLabel(nextIndex, blocks.length),
       nextBlockStartLabel: formatBlockStartTime(nextBlock.startAt),
@@ -751,7 +846,7 @@ export function MonitorScreen() {
   ]);
 
   const tryEvaluateBlockOutcome = useCallback(() => {
-    if (!currentBlock || !timerRunning) return;
+    if (!currentBlock || !timerRunning || !blockEnrollmentReady) return;
 
     if (
       isSupervisionBlockFailed({
@@ -774,6 +869,7 @@ export function MonitorScreen() {
   }, [
     completeCurrentBlock,
     currentBlock,
+    blockEnrollmentReady,
     distractionCount,
     timerRunning,
   ]);
@@ -886,6 +982,8 @@ export function MonitorScreen() {
       }}
       onCameraClosedByUser={handleCameraClosedByUser}
       onEnrollmentTimeout={handleEnrollmentTimeout}
+      onEnrollmentReady={handleEnrollmentReady}
+      onEnrollmentFailed={handleEnrollmentFailed}
       yuriStrikeCount={distractionCount}
       onYuriThirdStrikeComplete={handleYuriThirdStrikeComplete}
       onYuriIdleRecoveryStart={() => {
@@ -894,6 +992,18 @@ export function MonitorScreen() {
       }}
       behaviorDetectionPaused={breakPhase != null}
       fillViewport
+      focusTimer={
+        timerRunning && blockEnrollmentReady && !breakPhase && currentBlock
+          ? {
+              totalSeconds: focusSeconds,
+              remainingSeconds: timer,
+              blockLabel:
+                totalFocusBlocks > 0
+                  ? formatBlockLabel(currentBlockIndex, totalFocusBlocks)
+                  : undefined,
+            }
+          : undefined
+      }
     />
   );
 
@@ -914,39 +1024,58 @@ export function MonitorScreen() {
     const pending = pendingNextBlockRef.current;
     if (!pending) return;
     pendingNextBlockRef.current = null;
+    setOutcomeModal(null);
     setBreakPhase(null);
     breakPhaseRef.current = false;
     addLog(`进入 ${formatBlockLabel(pending.nextIndex, pending.blocks.length)}…`, "normal");
     beginFocusBlock(pending.blocks, pending.nextIndex, pending.taskText);
   }, [addLog, beginFocusBlock]);
 
+  const beginBreakPhaseFromPending = useCallback(
+    (options?: { dismissOutcomeModal?: boolean }) => {
+      const pending = pendingNextBlockRef.current;
+      if (!pending) return;
+
+      if (options?.dismissOutcomeModal) {
+        setOutcomeModal(null);
+      }
+
+      const nextBlock = pending.blocks[pending.nextIndex];
+      const secondsRemaining = getSecondsUntilBlockStart(nextBlock);
+
+      if (secondsRemaining <= 0) {
+        startNextFocusBlock();
+        return;
+      }
+
+      if (breakPhaseRef.current) return;
+
+      breakPhaseRef.current = true;
+      setBreakPhase({
+        blocks: pending.blocks,
+        nextIndex: pending.nextIndex,
+        taskText: pending.taskText,
+        secondsRemaining,
+        nextBlockLabel: formatBlockLabel(pending.nextIndex, pending.blocks.length),
+        nextBlockStartLabel: formatBlockStartTime(nextBlock.startAt),
+      });
+      addLog(
+        `段间休息 ${secondsRemaining >= 60 ? `${Math.ceil(secondsRemaining / 60)} 分钟` : `${secondsRemaining} 秒`}，${formatBlockLabel(pending.nextIndex, pending.blocks.length)} 将自动开始`,
+        "normal"
+      );
+    },
+    [addLog, startNextFocusBlock]
+  );
+
   const handleStartBreak = useCallback(() => {
-    const pending = pendingNextBlockRef.current;
-    setOutcomeModal(null);
-    if (!pending) return;
+    beginBreakPhaseFromPending({ dismissOutcomeModal: true });
+  }, [beginBreakPhaseFromPending]);
 
-    const nextBlock = pending.blocks[pending.nextIndex];
-    const secondsRemaining = getSecondsUntilBlockStart(nextBlock);
-
-    if (secondsRemaining <= 0) {
-      startNextFocusBlock();
-      return;
-    }
-
-    breakPhaseRef.current = true;
-    setBreakPhase({
-      blocks: pending.blocks,
-      nextIndex: pending.nextIndex,
-      taskText: pending.taskText,
-      secondsRemaining,
-      nextBlockLabel: formatBlockLabel(pending.nextIndex, pending.blocks.length),
-      nextBlockStartLabel: formatBlockStartTime(nextBlock.startAt),
-    });
-    addLog(
-      `段间休息 ${Math.ceil(secondsRemaining / 60)} 分钟，${formatBlockLabel(pending.nextIndex, pending.blocks.length)} 将自动开始`,
-      "normal"
-    );
-  }, [addLog, startNextFocusBlock]);
+  useEffect(() => {
+    if (outcomeModal?.kind !== "block-success") return;
+    if (outcomeModal.breakSecondsUntilNext <= 0) return;
+    beginBreakPhaseFromPending({ dismissOutcomeModal: false });
+  }, [outcomeModal, beginBreakPhaseFromPending]);
 
   useEffect(() => {
     if (!breakPhase) return;
@@ -973,13 +1102,17 @@ export function MonitorScreen() {
     <>
       <div ref={takeoverRootRef} className="relative h-full w-full min-h-0 bg-stone-950">
         {crtMonitor}
-        {breakPhase && (
-          <SupervisionBreakOverlay
-            nextBlockLabel={breakPhase.nextBlockLabel}
-            nextBlockStartLabel={breakPhase.nextBlockStartLabel}
-            secondsRemaining={breakPhase.secondsRemaining}
-          />
-        )}
+        <AnimatePresence>
+          {breakPhase && (
+            <SupervisionBreakOverlay
+              key="supervision-break"
+              nextBlockLabel={breakPhase.nextBlockLabel}
+              nextBlockStartLabel={breakPhase.nextBlockStartLabel}
+              secondsRemaining={breakPhase.secondsRemaining}
+              taskText={breakPhase.taskText}
+            />
+          )}
+        </AnimatePresence>
       </div>
       {officerSelectModal}
       <SupervisionOutcomeModal

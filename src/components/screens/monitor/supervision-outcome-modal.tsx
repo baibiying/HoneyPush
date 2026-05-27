@@ -9,6 +9,7 @@ import {
   Swords,
   Target,
   AlertTriangle,
+  ListOrdered,
   CameraOff,
   Timer,
   Ban,
@@ -80,11 +81,14 @@ function GameStatPill({
 
 function DistractionBattleLog({ stats }: { stats: SupervisionOutcomeStats }) {
   const list = stats.distractions;
+  const throughBlock = stats.currentBlockNumber;
 
   if (list.length === 0) {
     return (
       <p className="text-center text-lg sm:text-xl font-bold text-emerald-200/90 py-6">
-        本段零摸鱼，尤里教官无话可说。
+        {throughBlock > 1
+          ? `第 1～${throughBlock} 段均无摸鱼，尤里教官无话可说。`
+          : "本段零摸鱼，尤里教官无话可说。"}
       </p>
     );
   }
@@ -176,13 +180,19 @@ function GameOutcomeStats({ stats, showCoins, showAccount }: { stats: Supervisio
           icon={<Target className="h-4 w-4" />}
         />
         <GameStatPill
-          label="摸鱼次数"
+          label="本段摸鱼"
           value={stats.distractionsInBlock}
           accent="rose"
           icon={<AlertTriangle className="h-4 w-4" />}
         />
         <GameStatPill
-          label="剩余星"
+          label="累计摸鱼"
+          value={stats.distractionsCumulative}
+          accent="rose"
+          icon={<ListOrdered className="h-4 w-4" />}
+        />
+        <GameStatPill
+          label="本段剩余星"
           value={
             <span className="inline-flex items-center gap-2">
               {stats.starsRemaining}
@@ -197,11 +207,18 @@ function GameOutcomeStats({ stats, showCoins, showAccount }: { stats: Supervisio
       <GameHudPanel className="p-4 sm:p-6">
         <div className="flex items-center gap-2 mb-4 border-b-2 border-white/15 pb-3">
           <Swords className="h-5 w-5 text-rose-300" />
-          <h3 className="font-bangers text-2xl sm:text-3xl text-rose-100 tracking-wide">
-            摸鱼战报
-          </h3>
-          <span className="ml-auto font-mono text-sm sm:text-base font-bold text-rose-200/80 tabular-nums">
-            共 {stats.distractions.length} 次
+          <div className="min-w-0">
+            <h3 className="font-bangers text-2xl sm:text-3xl text-rose-100 tracking-wide">
+              摸鱼战报
+            </h3>
+            {stats.currentBlockNumber > 1 && (
+              <p className="text-xs sm:text-sm font-bold text-rose-200/70">
+                第 1～{stats.currentBlockNumber} 段累计
+              </p>
+            )}
+          </div>
+          <span className="ml-auto font-mono text-sm sm:text-base font-bold text-rose-200/80 tabular-nums shrink-0">
+            共 {stats.distractionsCumulative} 次
           </span>
         </div>
         <DistractionBattleLog stats={stats} />
