@@ -41,8 +41,10 @@ export function ScheduleUnscheduledNotice({
               >
                 部分任务未能排入
               </h3>
-              <p className="mt-3 text-base sm:text-lg font-bold text-amber-50/95 leading-snug max-w-md">
+              <p className="mt-3 text-base sm:text-lg font-black text-amber-50 leading-snug max-w-md">
                 已按番茄钟（专注 25 分钟 + 休息 5 分钟）在可用时段内排期 {scheduledCount} 条。
+              </p>
+              <p className="mt-2 text-sm sm:text-base font-bold text-amber-100/90 leading-snug max-w-md">
                 以下 {taskNames.length} 条在现有可用时段内排不下，请增加时段或缩短预计用时后重试：
               </p>
               <ul className="mt-4 w-full max-w-sm space-y-2 text-left px-2">

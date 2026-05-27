@@ -5,6 +5,7 @@ import { CalendarDays } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
 import { FROSTED_FIELD } from "./task-form-shared";
 import { expandScheduledTaskToFocusSegments } from "@/lib/ai/schedule-times";
+import { SchedulePomodoroHint } from "./schedule-pomodoro-hint";
 import {
   buildCalendarTaskColorMap,
   getCalendarTaskPalette,
@@ -351,7 +352,8 @@ export function ScheduleCalendar({
     <div className={`${FROSTED_FIELD} flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-10 text-center`}>
       <CalendarDays className="mx-auto h-9 w-9 text-amber-300/90 mb-3" strokeWidth={2.5} />
       <p className="font-bangers text-lg text-amber-100/95 tracking-wide">暂无已排期时段</p>
-      <p className="text-[10px] font-semibold text-amber-100/75 mt-2 max-w-xs mx-auto">
+      <SchedulePomodoroHint variant="empty" />
+      <p className="text-xs sm:text-sm font-bold text-amber-100/70 mt-3 max-w-xs mx-auto">
         配置「可用时段」后点击「排期」，任务将显示在下方日历中
       </p>
     </div>
@@ -474,8 +476,11 @@ export function ScheduleCalendar({
 
   if (embedded) {
     return (
-      <div className="h-full min-h-0 flex flex-1 flex-col">
-        {!hasAnyScheduled ? emptyState : calendarGrid}
+      <div className="h-full min-h-0 flex flex-1 flex-col p-2 sm:p-3">
+        <SchedulePomodoroHint variant="banner" />
+        <div className="flex-1 min-h-0 flex flex-col">
+          {!hasAnyScheduled ? emptyState : calendarGrid}
+        </div>
       </div>
     );
   }
@@ -489,6 +494,7 @@ export function ScheduleCalendar({
         </div>
         <span className="text-[10px] font-bold text-neutral-600">{statusLine}</span>
       </div>
+      <SchedulePomodoroHint variant="bannerLight" />
       {!hasAnyScheduled ? emptyState : calendarGrid}
     </div>
   );

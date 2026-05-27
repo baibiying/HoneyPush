@@ -452,9 +452,28 @@ export function MonitorScreen() {
   const reportDistraction = useCallback(
     (event: DistractionEvent) => {
       setIsDistracted(true);
-      setDistractionLevel(event.level);
       setDistractionPlayKey((k) => k + 1);
       setMockEventText(event.reason);
+
+      if (currentOfficerId === "yuri") {
+        if (!distractionCountedRef.current) {
+          distractionCountedRef.current = true;
+          setDistractionCount((c) => {
+            const next = c + 1;
+            setDistractionLevel(Math.min(3, next) as DistractionLevel);
+            playBeep();
+            const labels = ["警示", "掏枪", "开枪"];
+            addLog(
+              `第 ${next} 次摸鱼 · 尤里教官播放「${labels[next - 1] ?? "开枪"}」`,
+              "warning"
+            );
+            return next;
+          });
+        }
+        return;
+      }
+
+      setDistractionLevel(event.level);
 
       if (event.level >= 2 && !distractionCountedRef.current) {
         distractionCountedRef.current = true;
@@ -475,8 +494,12 @@ export function MonitorScreen() {
         addLog(`${levelLabel} · ${activeOfficer.name} 监督视频已触发`, "warning");
       }
     },
-    [activeOfficer.name, addLog]
+    [activeOfficer.name, addLog, currentOfficerId]
   );
+
+  const handleYuriThirdStrikeComplete = useCallback(() => {
+    void abortSupervisionRun("累计三次摸鱼，任务执行失败");
+  }, [abortSupervisionRun]);
 
   const handleLaunch = async (officerId: string) => {
     if (!selectedTask) return;
@@ -506,6 +529,8 @@ export function MonitorScreen() {
       }}
       onCameraClosedByUser={handleCameraClosedByUser}
       onEnrollmentTimeout={handleEnrollmentTimeout}
+      yuriStrikeCount={distractionCount}
+      onYuriThirdStrikeComplete={handleYuriThirdStrikeComplete}
       fillViewport
     />
   );

@@ -87,7 +87,7 @@ export const STATIONS: StationConfig[] = [
     id: "calendar",
     action: "enter",
     title: "AI 排期",
-    subtitle: "查看日历 · 一键排期全部任务",
+    subtitle: "番茄钟 25+5 · 查看日历并排期",
     icon: CalendarDays,
     gradient: "from-fuchsia-400 via-purple-500 to-violet-800",
     glow: "shadow-[0_0_32px_rgba(192,132,252,0.55)]",

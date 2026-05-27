@@ -8,6 +8,9 @@ import { compareTasksForSchedule } from "./schedule-priority";
 /** 番茄钟：专注时长 + 段间休息（与 PRODUCT.md 一致） */
 export const POMODORO_FOCUS_MINUTES = 25;
 export const POMODORO_BREAK_MINUTES = 5;
+
+/** AI 排期页面向用户展示的番茄钟说明 */
+export const SCHEDULE_POMODORO_HINT = `排期按番茄钟拆分：每段专注 ${POMODORO_FOCUS_MINUTES} 分钟，段间休息 ${POMODORO_BREAK_MINUTES} 分钟（休息不显示在日历色块中）。`;
 /** 不同任务之间的最短间隔 */
 export const TASK_GAP_MINUTES = 10;
 

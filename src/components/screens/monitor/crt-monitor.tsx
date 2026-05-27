@@ -16,6 +16,7 @@ import {
   OFFICERS,
 } from "@/lib/officers-data";
 import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-video";
+import { YuriOfficerVideo } from "@/components/screens/monitor/yuri-officer-video";
 import { unlockBrowserAudio } from "@/lib/unlock-browser-audio";
 import {
   averageDescriptors,
@@ -71,6 +72,10 @@ interface CrtMonitorProps {
   onCameraClosedByUser?: () => void;
   /** 采集超时未完成 */
   onEnrollmentTimeout?: () => void;
+  /** 尤里教官：累计第三次摸鱼「开枪」片段结束 */
+  onYuriThirdStrikeComplete?: () => void;
+  /** 尤里教官：当前摸鱼次数（1～3） */
+  yuriStrikeCount?: number;
   fillViewport?: boolean;
 }
 
@@ -98,10 +103,13 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     onFaceRestored,
     onCameraClosedByUser,
     onEnrollmentTimeout,
+    onYuriThirdStrikeComplete,
+    yuriStrikeCount = 0,
     fillViewport = false,
   },
   ref
 ) {
+  const isYuriOfficer = officerId === "yuri";
   const [cameraActive, setCameraActive] = useState(false);
   const [enrollmentPhase, setEnrollmentPhase] = useState<EnrollmentPhase>("pending");
   const [enrollmentProgress, setEnrollmentProgress] = useState(0);
@@ -135,6 +143,8 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   const [detectionStatus, setDetectionStatus] = useState<TrackerDetectionStatus>("idle");
   const [modelLoaded, setModelLoaded] = useState(false);
   const [userFaceMatched, setUserFaceMatched] = useState(false);
+  const [yuriSupervisionEnabled, setYuriSupervisionEnabled] = useState(false);
+  const yuriSupervisionEnabledRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -180,6 +190,8 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     enrollmentTimeoutFiredRef.current = false;
     setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_MINUTES * 60);
     setUserFaceMatched(false);
+    setYuriSupervisionEnabled(false);
+    yuriSupervisionEnabledRef.current = false;
     resetPhoneUseTimers();
     phoneUseActiveRef.current = false;
     setPhoneBestScore(0);
@@ -391,7 +403,11 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           tryAddEnrollmentSample((results[0] as WithDescriptor).descriptor);
         }
         return;
-      } else if (enrollmentPhase === "ready" && userDescriptorRef.current) {
+      } else if (
+        enrollmentPhase === "ready" &&
+        userDescriptorRef.current &&
+        (!isYuriOfficer || yuriSupervisionEnabledRef.current)
+      ) {
         const results = await faceapi
           .detectAllFaces(video, detectorOpts)
           .withFaceLandmarks()
@@ -420,7 +436,19 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     } catch {
       /* 静默跳过 */
     }
-  }, [enrollmentPhase, processSupervisionFrame, tryAddEnrollmentSample, useLegacyFaceCount]);
+  }, [
+    enrollmentPhase,
+    isYuriOfficer,
+    processSupervisionFrame,
+    tryAddEnrollmentSample,
+    useLegacyFaceCount,
+  ]);
+
+  const handleYuriIntroComplete = useCallback(() => {
+    yuriSupervisionEnabledRef.current = true;
+    setYuriSupervisionEnabled(true);
+    setEnrollmentHint("开场白结束，监督已开始");
+  }, []);
 
   const notifyCameraClosedByUser = useCallback(() => {
     onCameraClosedByUserRef.current?.();
@@ -558,7 +586,8 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
   useEffect(() => {
     const supervisionActive =
-      enrollmentPhase === "ready" || useLegacyFaceCount;
+      (enrollmentPhase === "ready" || useLegacyFaceCount) &&
+      (!isYuriOfficer || yuriSupervisionEnabled);
     if (!cameraActive || !modelLoaded || !supervisionActive || !phoneDetectorReady) {
       phoneUseActiveRef.current = false;
       return;
@@ -592,9 +621,11 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   }, [
     cameraActive,
     enrollmentPhase,
+    isYuriOfficer,
     modelLoaded,
     phoneDetectorReady,
     useLegacyFaceCount,
+    yuriSupervisionEnabled,
   ]);
 
   useEffect(() => {
@@ -671,18 +702,28 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
         {/* 主画面：监督官视频（专注 / 摸鱼警告） */}
         <div className="absolute inset-0 z-0">
-          <OfficerClipVideo
-            key={mainClipKey}
-            className="h-full w-full object-contain bg-black"
-            src={mainClip.src}
-            startSec={mainClip.startSec}
-            durationSec={mainClip.durationSec}
-            autoPlay
-            loop={!isDistracted || distractionLevel === 3}
-            muted={!isDistracted}
-            controls={false}
-            showClipControls={false}
-          />
+          {isYuriOfficer ? (
+            <YuriOfficerVideo
+              className="h-full w-full object-contain bg-black"
+              enrollmentReady={enrollmentPhase === "ready" || useLegacyFaceCount}
+              isDistracted={isDistracted}
+              strikeCount={isDistracted ? Math.max(1, yuriStrikeCount) : 0}
+              onIntroComplete={handleYuriIntroComplete}
+              onThirdStrikeComplete={() => onYuriThirdStrikeComplete?.()}
+            />
+          ) : (
+            <OfficerClipVideo
+              key={mainClipKey}
+              className="h-full w-full object-contain bg-black"
+              src={mainClip.src}
+              startSec={mainClip.startSec}
+              durationSec={mainClip.durationSec}
+              autoPlay
+              loop={!isDistracted || distractionLevel === 3}
+              controls={false}
+              showClipControls={false}
+            />
+          )}
         </div>
 
         <div
@@ -708,7 +749,11 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
                 {mockEventText}
               </p>
               <p className="mt-3 sm:mt-4 text-sm sm:text-base font-mono text-rose-200/90">
-                {activeOfficer.name} 正在督促 · 纠正后警报将自动解除
+                {isYuriOfficer
+                  ? yuriStrikeCount >= 3
+                    ? "三次摸鱼，任务即将判定失败"
+                    : "纠正后将继续巡视督促"
+                  : `${activeOfficer.name} 正在督促 · 纠正后警报将自动解除`}
               </p>
             </div>
           </div>
@@ -725,9 +770,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
               ].join(" ")}
             >
               {activeOfficer.name} ·{" "}
-              {isDistracted ? getLevelBannerLabel(distractionLevel) : "专注陪伴"}
+              {isDistracted
+                ? isYuriOfficer
+                  ? `摸鱼 ${Math.min(3, yuriStrikeCount)}/3`
+                  : getLevelBannerLabel(distractionLevel)
+                : isYuriOfficer && !yuriSupervisionEnabled
+                  ? "开场白"
+                  : "专注陪伴"}
             </span>
-            {!isDistracted && (
+            {!isDistracted && yuriSupervisionEnabled && (
               <span className="text-emerald-400/90 font-mono text-[10px] hidden sm:inline">
                 正常督促中
               </span>

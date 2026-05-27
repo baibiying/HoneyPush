@@ -12,7 +12,6 @@ type OfficerClipVideoProps = {
   durationSec?: number;
   loop?: boolean;
   autoPlay?: boolean;
-  muted?: boolean;
   /** 仅对「非片段」模式生效；片段模式使用自定义控制条 */
   controls?: boolean;
   className?: string;
@@ -34,7 +33,6 @@ export function OfficerClipVideo({
   durationSec,
   loop = false,
   autoPlay = false,
-  muted = false,
   controls = true,
   className = "",
   showClipControls = true,
@@ -82,14 +80,25 @@ export function OfficerClipVideo({
     }
   }, [startSec]);
 
+  const playWithSound = useCallback(async (el: HTMLVideoElement) => {
+    el.muted = false;
+    el.volume = 1;
+    await unlockBrowserAudio();
+    try {
+      await el.play();
+    } catch {
+      /* 浏览器可能仍阻止带声自动播放，需用户点击播放 */
+    }
+  }, []);
+
   const handlePlay = useCallback(() => {
     const el = videoRef.current;
     if (!el) return;
     if (endSec != null && el.currentTime >= endSec - 0.05) {
       el.currentTime = startSec;
     }
-    void el.play().catch(() => {});
-  }, [endSec, startSec]);
+    void playWithSound(el);
+  }, [endSec, playWithSound, startSec]);
 
   const handlePause = useCallback(() => {
     videoRef.current?.pause();
@@ -125,31 +134,14 @@ export function OfficerClipVideo({
     if (!autoPlay) return;
     const el = videoRef.current;
     if (!el) return;
-    el.muted = muted;
-    el.volume = muted ? 0 : 1;
     seekToStart();
-    const tryPlay = async () => {
-      try {
-        await el.play();
-      } catch {
-        if (!muted) {
-          await unlockBrowserAudio();
-          el.muted = false;
-          el.volume = 1;
-          try {
-            await el.play();
-          } catch {
-            /* 浏览器仍阻止带声自动播放 */
-          }
-        }
-      }
-    };
+    const tryPlay = () => void playWithSound(el);
     void tryPlay();
     if (el.readyState < 2) {
       el.addEventListener("loadeddata", tryPlay, { once: true });
       return () => el.removeEventListener("loadeddata", tryPlay);
     }
-  }, [autoPlay, isClipped, muted, seekToStart, src]);
+  }, [autoPlay, playWithSound, seekToStart, src]);
 
   useEffect(() => {
     if (!isClipped) return;
@@ -170,7 +162,7 @@ export function OfficerClipVideo({
         controls={isClipped ? false : controls}
         controlsList={isClipped ? "nodownload noplaybackrate" : undefined}
         playsInline
-        muted={muted}
+        muted={false}
         autoPlay={isClipped ? false : autoPlay}
         preload="metadata"
         onLoadedData={handleLoadedData}
