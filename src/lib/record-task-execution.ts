@@ -52,6 +52,7 @@ export async function recordTaskExecutionFailure(params: {
     taskId: params.taskId,
     outcome: "failed",
     durationMinutes: params.durationMinutes ?? 25,
+    coinsEarned: 0,
   });
 }
 
@@ -60,6 +61,7 @@ export async function recordTaskExecutionSuccess(params: {
   officerId: string;
   distractionCount?: number;
   durationMinutes?: number;
+  coinsEarned: number;
 }): Promise<TaskExecutionRecordResult> {
   return postTaskExecution({
     officerId: params.officerId,
@@ -67,5 +69,6 @@ export async function recordTaskExecutionSuccess(params: {
     taskId: params.taskId,
     outcome: "completed",
     durationMinutes: params.durationMinutes ?? 25,
+    coinsEarned: Math.max(0, Math.round(params.coinsEarned)),
   });
 }

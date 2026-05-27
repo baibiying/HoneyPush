@@ -30,6 +30,7 @@ import {
 } from "@/lib/schedule-execution";
 import { useScheduleTaskReminders } from "@/hooks/use-schedule-task-reminders";
 import { recordTaskExecutionFailure, recordTaskExecutionSuccess } from "@/lib/record-task-execution";
+import { computeFocusCoinsEarned } from "@/lib/supervision-rewards";
 import {
   SUPERVISION_MAX_STRIKES,
   formatBlockLabel,
@@ -509,6 +510,7 @@ export function MonitorScreen() {
             run.completedBlockIndexes?.length ?? 0,
             currentBlockIndex,
             {
+              coinsEarned: 0,
               totalCoins: record.data?.stats?.totalCoins,
               totalSessions: record.data?.stats?.totalSessions,
             },
@@ -717,13 +719,20 @@ export function MonitorScreen() {
     const blocks = run.focusBlocks ?? focusBlocks;
     const completedCount = blocks.length;
 
+    const coinsEarned = computeFocusCoinsEarned(
+      completedCount,
+      [...taskDistractionsRef.current]
+    );
+
     if (!user) {
       stopSupervisionMedia();
       addLog("当前为游客模式，任务完成未保存到账号", "normal");
       setOutcomeModal({
         kind: "task-success",
         recordSaved: false,
-        stats: buildCurrentOutcomeStats(run, completedCount, currentBlockIndex),
+        stats: buildCurrentOutcomeStats(run, completedCount, currentBlockIndex, {
+          coinsEarned,
+        }),
       });
       playChime();
       return;
@@ -734,6 +743,7 @@ export function MonitorScreen() {
       distractionCount: totalDistractionsRef.current,
       taskId: run.taskId,
       durationMinutes: SUPERVISION_FOCUS_BLOCK_MINUTES,
+      coinsEarned,
     });
 
     stopSupervisionMedia();
@@ -749,7 +759,7 @@ export function MonitorScreen() {
       kind: "task-success",
       recordSaved: record.ok,
         stats: buildCurrentOutcomeStats(run, completedCount, currentBlockIndex, {
-          coinsEarned: record.data?.session?.coinsEarned,
+          coinsEarned: record.ok ? coinsEarned : 0,
           totalCoins: record.data?.stats?.totalCoins,
           totalSessions: record.data?.stats?.totalSessions,
         }),

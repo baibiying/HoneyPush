@@ -80,7 +80,6 @@ export function TaskHoverDetailCard({
   const focusSegments = planPomodoroSegments(task.durationMinutes).filter(
     (segment) => segment.kind === "focus"
   ).length;
-
   return (
     <div
       className={[

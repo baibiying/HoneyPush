@@ -164,7 +164,7 @@ function FailureCausePanel({
   );
 }
 
-function GameOutcomeStats({ stats, showCoins, showAccount }: { stats: SupervisionOutcomeStats; showCoins?: boolean; showAccount?: boolean }) {
+function GameOutcomeStats({ stats, showCoins }: { stats: SupervisionOutcomeStats; showCoins?: boolean }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-3 sm:gap-4 justify-center">
@@ -202,6 +202,12 @@ function GameOutcomeStats({ stats, showCoins, showAccount }: { stats: Supervisio
           accent="amber"
           icon={<Star className="h-4 w-4 fill-amber-300" />}
         />
+        <GameStatPill
+          label="累计获得星星"
+          value={stats.starsEarnedCumulative}
+          accent="amber"
+          icon={<Sparkles className="h-4 w-4 text-amber-200" />}
+        />
       </div>
 
       <GameHudPanel className="p-4 sm:p-6">
@@ -225,27 +231,27 @@ function GameOutcomeStats({ stats, showCoins, showAccount }: { stats: Supervisio
       </GameHudPanel>
 
       {showCoins && stats.coinsEarned != null && (
-        <GameHudPanel className="p-4 sm:p-5 text-center border-amber-400/50 bg-gradient-to-b from-amber-500/25 to-transparent">
+        <GameHudPanel
+          className={[
+            "p-4 sm:p-5 text-center border-amber-400/50",
+            stats.coinsEarned > 0
+              ? "bg-gradient-to-b from-amber-500/25 to-transparent"
+              : "bg-gradient-to-b from-stone-500/20 to-transparent border-stone-500/40",
+          ].join(" ")}
+        >
           <p className="text-sm font-black uppercase tracking-widest text-amber-200/90">战利品</p>
-          <p className="font-bangers text-4xl sm:text-5xl text-amber-300 mt-1">
+          <p
+            className={[
+              "font-bangers text-4xl sm:text-5xl mt-1",
+              stats.coinsEarned > 0 ? "text-amber-300" : "text-stone-400",
+            ].join(" ")}
+          >
             +{stats.coinsEarned} 专注币
           </p>
-        </GameHudPanel>
-      )}
-
-      {showAccount && (stats.totalCoins != null || stats.totalSessions != null) && (
-        <GameHudPanel className="p-4 sm:p-5 flex flex-wrap justify-center gap-6 sm:gap-10">
-          {stats.totalCoins != null && (
-            <div className="text-center">
-              <p className="text-xs font-black uppercase tracking-widest text-white/60">生涯专注币</p>
-              <p className="font-bangers text-3xl sm:text-4xl text-amber-300">{stats.totalCoins}</p>
-            </div>
-          )}
-          {stats.totalSessions != null && (
-            <div className="text-center">
-              <p className="text-xs font-black uppercase tracking-widest text-white/60">完成场次</p>
-              <p className="font-bangers text-3xl sm:text-4xl text-sky-300">{stats.totalSessions}</p>
-            </div>
+          {stats.coinsEarned === 0 && (
+            <p className="mt-2 text-sm font-bold text-stone-400">
+              任务未成功完成，本次不获得专注币
+            </p>
           )}
         </GameHudPanel>
       )}
@@ -315,9 +321,8 @@ export function SupervisionOutcomeModal({
     outcome.kind === "task-fail" ||
     outcome.kind === "block-fail" ||
     outcome.kind === "block-success";
-  const showCoins = outcome.kind === "task-success";
-  const showAccount =
-    outcome.kind === "task-success" || outcome.kind === "task-fail" || outcome.kind === "block-fail";
+  const showCoins =
+    outcome.kind === "task-success" || outcome.kind === "block-fail";
 
   return (
     <AnimatePresence>
@@ -398,11 +403,7 @@ export function SupervisionOutcomeModal({
             {showFailureCause && <FailureCausePanel failReason={failureReason} />}
 
             {showStats && (
-              <GameOutcomeStats
-                stats={outcome.stats}
-                showCoins={showCoins}
-                showAccount={showAccount}
-              />
+              <GameOutcomeStats stats={outcome.stats} showCoins={showCoins} />
             )}
 
             {"recordSaved" in outcome && !outcome.recordSaved && (

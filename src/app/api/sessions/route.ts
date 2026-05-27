@@ -29,12 +29,20 @@ export async function POST(req: NextRequest) {
     typeof body.durationMinutes === "number" && body.durationMinutes > 0
       ? Math.round(body.durationMinutes)
       : 25;
+  const coinsEarned =
+    outcome === "failed"
+      ? 0
+      : typeof body.coinsEarned === "number" && Number.isFinite(body.coinsEarned)
+        ? Math.max(0, Math.round(body.coinsEarned))
+        : undefined;
 
   const session = await createFocusSession(userId, officerId, distractionCount, {
     outcome,
     taskId,
     durationMinutes,
+    coinsEarned,
   });
+
   const stats =
     outcome === "completed"
       ? await upsertUserStats(userId, session.coinsEarned)

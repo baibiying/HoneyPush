@@ -1,4 +1,4 @@
-import { SUPERVISION_MAX_STRIKES } from "@/lib/supervision-blocks";
+import { computeSupervisionStarStats } from "@/lib/supervision-rewards";
 
 /** 单次摸鱼记录（含所属任务段） */
 export type DistractionStrikeRecord = {
@@ -21,7 +21,10 @@ export type SupervisionOutcomeStats = {
   /** 第 1 段至当前段累计摸鱼次数 */
   distractionsCumulative: number;
   totalDistractions: number;
+  /** 本段剩余星 */
   starsRemaining: number;
+  /** 第 1 段至当前段累计获得的星星数 */
+  starsEarnedCumulative: number;
   /** 摸鱼明细（含原因与所属段） */
   distractions: DistractionStrikeRecord[];
   coinsEarned?: number;
@@ -122,6 +125,11 @@ export function buildOutcomeStats(params: {
   const distractionsCumulative = params.distractions.filter(
     (d) => d.blockNumber <= params.currentBlockNumber
   ).length;
+  const { starsInBlock, starsEarnedCumulative } = computeSupervisionStarStats({
+    totalBlocks: params.totalBlocks,
+    currentBlockNumber: params.currentBlockNumber,
+    distractions: params.distractions,
+  });
 
   return {
     taskText: params.taskText,
@@ -132,7 +140,8 @@ export function buildOutcomeStats(params: {
     distractionsInBlock: strikesInCurrentBlock,
     distractionsCumulative,
     totalDistractions: params.totalDistractions,
-    starsRemaining: Math.max(0, SUPERVISION_MAX_STRIKES - strikesInCurrentBlock),
+    starsRemaining: starsInBlock,
+    starsEarnedCumulative,
     distractions: params.distractions,
     coinsEarned: params.coinsEarned,
     totalCoins: params.totalCoins,
