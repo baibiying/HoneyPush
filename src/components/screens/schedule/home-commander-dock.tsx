@@ -5,9 +5,11 @@ import { Coins, LogIn, LogOut, Scroll, UserPlus } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { usePlayerStats } from "@/hooks/use-player-stats";
 import { GameScrollWoodSeal } from "@/components/screens/performance/game-scroll-ui";
+import { useI18n } from "@/i18n/i18n-provider";
 
 /** 首页地图：游客通行证 / 已登录指挥官状态 */
 export function HomeCommanderDock() {
+  const { t } = useI18n();
   const { user, loading: authLoading, openAuthModal, logout } = useAuth();
   const { totalCoins } = usePlayerStats();
 
@@ -49,7 +51,7 @@ export function HomeCommanderDock() {
                     ].join(" ")}
                   >
                     <LogIn className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
-                    登入
+                    {t("dock.login")}
                   </button>
                   <button
                     type="button"
@@ -62,12 +64,12 @@ export function HomeCommanderDock() {
                     ].join(" ")}
                   >
                     <UserPlus className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
-                    注册
+                    {t("dock.register")}
                   </button>
                 </div>
               </div>
               <p className="mt-1 font-comic text-sm sm:text-base font-bold text-[#3d2810]/80 leading-tight line-clamp-1">
-                登入后任务、专注记录与战绩卷轴将同步至云端
+                {t("dock.guestHint")}
               </p>
             </div>
           </div>
@@ -76,10 +78,10 @@ export function HomeCommanderDock() {
     );
   }
 
-  const displayName = user.name || user.email || "指挥官";
+  const displayName = user.name || user.email || t("dock.commander");
 
   return (
-    <div className="w-full sm:max-w-[min(100%,440px)] shrink-0">
+    <div className="w-fit max-w-full shrink-0">
       <div
         className={[
           "rounded-xl border-[3px] border-[#1C1917] bg-[#FFF8E7]/95 backdrop-blur-sm",
@@ -87,30 +89,31 @@ export function HomeCommanderDock() {
           "px-3 py-2.5 sm:px-3.5 sm:py-3",
         ].join(" ")}
       >
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex min-w-0 items-center gap-2.5 flex-1">
-            <span
-              className={[
-                "flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg",
-                "border-2 border-[#1C1917] bg-gradient-to-br from-emerald-500 to-teal-700",
-                "text-sm sm:text-base font-bangers text-white shadow-[0_2px_0_#1C1917]",
-              ].join(" ")}
-              title="在线"
-            >
-              ✓
-            </span>
-            <div className="min-w-0">
-              <p className="truncate font-bangers text-xl sm:text-2xl text-[#1C1917] tracking-wide leading-tight">
-                {displayName}
-              </p>
-              <p className="text-sm sm:text-base font-bold text-emerald-800/85">云端同步中</p>
-            </div>
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+          <span
+            className={[
+              "flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg",
+              "border-2 border-[#1C1917] bg-gradient-to-br from-emerald-500 to-teal-700",
+              "text-sm sm:text-base font-bangers text-white shadow-[0_2px_0_#1C1917]",
+            ].join(" ")}
+            title={t("dock.online")}
+          >
+            ✓
+          </span>
+
+          <div className="flex shrink-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <p className="font-bangers text-xl sm:text-2xl text-[#1C1917] tracking-wide leading-none whitespace-nowrap">
+              {displayName}
+            </p>
+            <p className="text-sm sm:text-base font-bold text-emerald-800/85 leading-none whitespace-nowrap">
+              {t("dock.syncing")}
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <StatPill
               icon={<Coins className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />}
-              label="币"
+              label={t("dock.coins")}
               value={String(totalCoins)}
             />
             <button
@@ -125,7 +128,7 @@ export function HomeCommanderDock() {
               ].join(" ")}
             >
               <LogOut className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
-              退出
+              {t("dock.logout")}
             </button>
           </div>
         </div>
@@ -136,6 +139,8 @@ export function HomeCommanderDock() {
 
 /** 漫画风标题：木牌徽章 + 双色 Bangers 描边阴影 */
 function BasePassGameTitle() {
+  const { t } = useI18n();
+
   return (
     <div className="relative inline-flex shrink-0">
       <span
@@ -154,9 +159,11 @@ function BasePassGameTitle() {
         ].join(" ")}
       >
         <span className="font-bangers text-xl sm:text-2xl tracking-wide leading-none">
-          <span className="text-orange-800 drop-shadow-[0_2px_0_#1C1917]">基地</span>
+          <span className="text-orange-800 drop-shadow-[0_2px_0_#1C1917]">
+            {t("dock.basePassPart1")}
+          </span>
           <span className="text-[#1C1917] drop-shadow-[0_1px_0_rgba(255,255,255,0.55)]">
-            通行证
+            {t("dock.basePassPart2")}
           </span>
         </span>
       </span>

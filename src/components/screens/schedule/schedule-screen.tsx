@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { memory } from "@eazo/sdk";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useI18n } from "@/i18n/i18n-provider";
 import { TASKS_CHANGED_EVENT, emitClientEvent } from "@/lib/client-events";
-import { TaskAddDialog } from "./task-add-dialog";
+import { TaskAddPanel } from "./task-add-panel";
 import { TaskEditDialog, type ScheduleTask } from "./task-edit-dialog";
 import { QuadrantTaskBoard } from "./quadrant-task-board";
 import { ScheduleCalendar } from "./schedule-calendar";
@@ -108,18 +109,18 @@ function playChime() {
   }
 }
 
-async function readApiError(res: Response) {
-  const data = await res.json().catch(() => null);
-  return (data?.error as string | undefined) ?? "操作失败，请稍后重试";
-}
-
 export function ScheduleScreen() {
   const router = useRouter();
+  const { t } = useI18n();
+
+  const readApiError = useCallback(async (res: Response) => {
+    const data = await res.json().catch(() => null);
+    return (data?.error as string | undefined) ?? t("common.operationFailed");
+  }, [t]);
   const { user, loading: authLoading, promptLogin } = useAuth();
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
   const [tasksLoadError, setTasksLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
   const [availabilitySlots, setAvailabilitySlots] = useState(loadAvailabilitySlots);
   const [aiLoading, setAiLoading] = useState(false);
@@ -186,8 +187,8 @@ export function ScheduleScreen() {
     if (unscheduledCount > 0) {
       reasons.push(
         unscheduledCount === pendingTasks.length
-          ? `${unscheduledCount} 条待办尚未排期`
-          : `${unscheduledCount} 条任务尚未排期`
+          ? t("calendar.unscheduledTodo", { count: unscheduledCount })
+          : t("calendar.unscheduledTask", { count: unscheduledCount }),
       );
     }
 
@@ -198,7 +199,7 @@ export function ScheduleScreen() {
     const hasScheduledButNoSnapshot = scheduledCount > 0 && snapshot === null;
 
     if (availabilityOutOfSync || hasScheduledButNoSnapshot) {
-      reasons.push("可用时段已调整");
+      reasons.push(t("calendar.availabilityChanged"));
     }
 
     if (reasons.length === 0) return null;
@@ -207,7 +208,7 @@ export function ScheduleScreen() {
       reasons,
       isReschedule: scheduledCount > 0,
     };
-  }, [canEdit, pendingTasks, availabilitySlots, scheduledCount]);
+  }, [canEdit, pendingTasks, availabilitySlots, scheduledCount, t]);
 
   const validAvailabilityCount = useMemo(() => {
     const payload = availabilitySlots.map(({ date, startTime, endTime }) => ({
@@ -222,36 +223,36 @@ export function ScheduleScreen() {
     () => [
       {
         id: "create",
-        label: "创建任务",
+        label: t("quest.create"),
         done: stats.total > 0,
         scene: "tasks" as const,
       },
       {
         id: "view",
-        label: "查看任务",
+        label: t("quest.view"),
         done: stats.total > 0,
         scene: "tasks" as const,
       },
       {
         id: "time",
-        label: "可用时段",
+        label: t("quest.time"),
         done: validAvailabilityCount > 0,
         scene: "time" as const,
       },
       {
         id: "battle",
-        label: "AI 排期",
+        label: t("quest.battle"),
         done: scheduledCount > 0,
         scene: "calendar" as const,
       },
       {
         id: "officer",
-        label: "选择监督官",
+        label: t("quest.officer"),
         done: preferredOfficerId !== null,
         scene: "officer" as const,
       },
     ],
-    [stats.total, validAvailabilityCount, scheduledCount, preferredOfficerId]
+    [stats.total, validAvailabilityCount, scheduledCount, preferredOfficerId, t],
   );
 
   useEffect(() => {
@@ -313,7 +314,7 @@ export function ScheduleScreen() {
             setTasksLoadError(null);
             return;
           }
-          const message = await readApiError(res).catch(() => "任务加载失败");
+          const message = await readApiError(res).catch(() => t("tasks.loadFailed"));
           setTasksLoadError(message);
           console.error("[schedule] syncTasks failed:", message);
           return;
@@ -326,7 +327,7 @@ export function ScheduleScreen() {
       } catch (err) {
         if (cancelled) return;
         setTasks([]);
-        setTasksLoadError("任务加载失败，请刷新页面或稍后重试");
+        setTasksLoadError(t("tasks.loadFailed"));
         console.error("[schedule] syncTasks error:", err);
       } finally {
         if (!cancelled) setLoading(false);
@@ -346,7 +347,7 @@ export function ScheduleScreen() {
       cancelled = true;
       window.removeEventListener(TASKS_CHANGED_EVENT, refresh);
     };
-  }, [authLoading, user]);
+  }, [authLoading, user, readApiError, t]);
 
   const createTask = async (input: {
     text: string;
@@ -362,7 +363,7 @@ export function ScheduleScreen() {
 
     if (!res.ok) {
       if (res.status === 401) {
-        promptLogin("登录后才能把任务保存到 HoneyPush。");
+        promptLogin(t("prompts.saveTask"));
         throw new Error("AUTH_REQUIRED");
       }
       throw new Error(await readApiError(res));
@@ -380,7 +381,7 @@ export function ScheduleScreen() {
     deadline: string;
   }) => {
     if (!canEdit) {
-      promptLogin("登录后才能创建并保存任务。");
+      promptLogin(t("prompts.createTask"));
       return;
     }
 
@@ -393,7 +394,7 @@ export function ScheduleScreen() {
         deadline: payload.deadline,
       });
       setTasks((prev) => [task, ...prev]);
-      setAddTaskOpen(false);
+      setScene("tasks");
       playChime();
       memory.reportAction({
         content: `用户添加任务：${task.text}`,
@@ -403,7 +404,7 @@ export function ScheduleScreen() {
       }).catch(() => {});
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : "添加失败，请重试");
+      alert(err instanceof Error ? err.message : t("tasks.addFailed"));
     } finally {
       setAddingTask(false);
     }
@@ -418,7 +419,7 @@ export function ScheduleScreen() {
     }>
   ) => {
     if (!canEdit) {
-      promptLogin("登录后才能创建并保存任务。");
+      promptLogin(t("prompts.createTask"));
       return;
     }
     if (payloads.length === 0) return;
@@ -437,7 +438,7 @@ export function ScheduleScreen() {
         );
       }
       setTasks((prev) => [...created.reverse(), ...prev]);
-      setAddTaskOpen(false);
+      setScene("tasks");
       playChime();
       memory.reportAction({
         content: `用户通过 AI 一次添加 ${created.length} 个任务`,
@@ -447,7 +448,7 @@ export function ScheduleScreen() {
       }).catch(() => {});
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : "批量添加失败，请重试");
+      alert(err instanceof Error ? err.message : t("tasks.batchAddFailed"));
     } finally {
       setAddingTask(false);
     }
@@ -478,7 +479,7 @@ export function ScheduleScreen() {
 
       if (!res.ok) {
         if (res.status === 401) {
-          promptLogin("登录后才能修改任务。");
+          promptLogin(t("prompts.editTask"));
           throw new Error("AUTH_REQUIRED");
         }
         throw new Error(await readApiError(res));
@@ -489,7 +490,7 @@ export function ScheduleScreen() {
       emitClientEvent(TASKS_CHANGED_EVENT);
       return updated;
     },
-    [promptLogin]
+    [promptLogin, readApiError, t]
   );
 
   const handleAiSchedule = useCallback(
@@ -497,20 +498,20 @@ export function ScheduleScreen() {
       const isAuto = options?.auto === true;
 
       if (!canEdit) {
-        if (!isAuto) promptLogin("登录后才能使用 AI 排期。");
+        if (!isAuto) promptLogin(t("prompts.aiSchedule"));
         return;
       }
 
       if (aiLoading) return;
 
       if (pendingTasks.length === 0) {
-        if (!isAuto) alert("请先在「创建任务」里添加至少一条待办。");
+        if (!isAuto) alert(t("calendar.alertNeedTasks"));
         return;
       }
 
       const missingDeadline = pendingTasks.filter((task) => !task.deadline);
       if (missingDeadline.length > 0) {
-        if (!isAuto) alert("请为每条待排期任务填写截止时间后再执行 AI 排期。");
+        if (!isAuto) alert(t("calendar.alertNeedDeadline"));
         return;
       }
 
@@ -520,11 +521,11 @@ export function ScheduleScreen() {
         endTime,
       }));
       if (availability.length === 0) {
-        if (!isAuto) alert("请至少添加一个今天或未来几天的可用时间段。");
+        if (!isAuto) alert(t("calendar.alertNeedSlots"));
         return;
       }
       if (buildAvailabilityWindows(availability).length === 0) {
-        if (!isAuto) alert("可用时间段均已过期，请添加今天或未来的时段后再排期。");
+        if (!isAuto) alert(t("calendar.alertSlotsExpired"));
         return;
       }
 
@@ -548,7 +549,7 @@ export function ScheduleScreen() {
 
         if (!res.ok) {
           if (res.status === 401) {
-            if (!isAuto) promptLogin("登录后才能使用 AI 排期。");
+            if (!isAuto) promptLogin(t("prompts.aiSchedule"));
             return;
           }
           throw new Error(await readApiError(res));
@@ -572,7 +573,7 @@ export function ScheduleScreen() {
         const plan = Array.isArray(data.schedule) ? data.schedule : [];
         if (plan.length === 0) {
           if (!isAuto) {
-            alert("在可用时间段内无法排下任何任务，请增加未来几天的时段或缩短任务时长。");
+            alert(t("calendar.alertNoFit"));
           }
           return;
         }
@@ -626,7 +627,7 @@ export function ScheduleScreen() {
         }).catch(() => {});
       } catch (err) {
         if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-        alert(err instanceof Error ? err.message : "AI 排期失败，请重试");
+        alert(err instanceof Error ? err.message : t("calendar.scheduleFailed"));
       } finally {
         setAiLoading(false);
       }
@@ -637,23 +638,25 @@ export function ScheduleScreen() {
       canEdit,
       pendingTasks,
       promptLogin,
+      readApiError,
+      t,
       updateTaskById,
     ]
   );
 
   const deleteTaskById = async (id: number) => {
     if (!canEdit) {
-      promptLogin("登录后才能删除任务。");
+      promptLogin(t("prompts.deleteTask"));
       return;
     }
 
-    if (!window.confirm("确定删除这个任务吗？")) return;
+    if (!window.confirm(t("common.confirmDeleteTask"))) return;
 
     try {
       const res = await request(`/api/tasks/${id}`, { method: "DELETE" });
       if (!res.ok) {
         if (res.status === 401) {
-          promptLogin("登录后才能删除任务。");
+          promptLogin(t("prompts.deleteTask"));
           return;
         }
         throw new Error(await readApiError(res));
@@ -663,7 +666,7 @@ export function ScheduleScreen() {
       emitClientEvent(TASKS_CHANGED_EVENT);
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : "删除失败，请重试");
+      alert(err instanceof Error ? err.message : t("tasks.deleteFailed"));
     }
   };
 
@@ -687,7 +690,7 @@ export function ScheduleScreen() {
       playChime();
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : "保存失败，请重试");
+      alert(err instanceof Error ? err.message : t("tasks.saveFailed"));
     } finally {
       setSavingEdit(false);
     }
@@ -697,8 +700,8 @@ export function ScheduleScreen() {
     return (
       <div className="w-full h-full flex items-center justify-center">
         <div className="text-center space-y-2">
-          <p className="font-bangers text-2xl text-[#1C1917]">加载副本中...</p>
-          <p className="text-sm font-comic text-neutral-500">正在同步你的任务存档</p>
+          <p className="font-bangers text-2xl text-[#1C1917]">{t("hub.loadingTitle")}</p>
+          <p className="text-sm font-comic text-neutral-500">{t("hub.loadingSubtitle")}</p>
         </div>
       </div>
     );
@@ -708,16 +711,14 @@ export function ScheduleScreen() {
     aiLoading || pendingTasks.length === 0 || validAvailabilityCount === 0;
 
   const scheduleButtonLabel = aiLoading
-    ? "AI 排期中..."
+    ? t("calendar.scheduling")
     : pendingTasks.length === 0
-      ? "暂无待排任务"
+      ? t("calendar.noPending")
       : validAvailabilityCount === 0
-        ? "先设可用时段"
+        ? t("calendar.needAvailability")
         : scheduleRefreshHint?.isReschedule
-          ? "重新排期"
-          : scheduleRefreshHint
-            ? "排期"
-            : "排期";
+          ? t("calendar.reschedule")
+          : t("calendar.schedule");
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col">
@@ -726,14 +727,22 @@ export function ScheduleScreen() {
         onSceneChange={setScene}
         canEdit={canEdit}
         questSteps={questSteps}
-        onOpenAddTask={() => setAddTaskOpen(true)}
+        onOpenAddTask={() => setScene("create")}
         onRequireLogin={promptLogin}
+        createTaskPanel={
+          <TaskAddPanel
+            saving={addingTask}
+            onClose={() => setScene("map")}
+            onSubmit={handleAddTaskSubmit}
+            onSubmitBatch={handleAddTasksBatch}
+          />
+        }
         tasksPanel={
           tasksLoadError ? (
             <p className="text-center py-12 font-comic text-amber-100/90 text-sm px-4">
               {tasksLoadError}
               <span className="block mt-2 text-xs text-amber-100/70">
-                若刚更新过代码，请在项目目录执行：npm run db:migrate
+                {t("hub.migrateHint")}
               </span>
             </p>
           ) : (
@@ -742,7 +751,7 @@ export function ScheduleScreen() {
             tasks={activeTasks}
             openTaskMenuId={openTaskMenuId}
             canEdit={canEdit}
-            onRequireLogin={() => promptLogin("登录后才能编辑或删除任务。")}
+            onRequireLogin={() => promptLogin(t("prompts.editOrDeleteTask"))}
             onMenuToggle={(taskId) =>
               setOpenTaskMenuId((prev) => (prev === taskId ? null : taskId))
             }
@@ -817,14 +826,6 @@ export function ScheduleScreen() {
         performancePanel={
           <PerformancePanel onRequireLogin={promptLogin} canEdit={canEdit} />
         }
-      />
-
-      <TaskAddDialog
-        open={addTaskOpen}
-        saving={addingTask}
-        onOpenChange={setAddTaskOpen}
-        onSubmit={handleAddTaskSubmit}
-        onSubmitBatch={handleAddTasksBatch}
       />
 
       <TaskEditDialog

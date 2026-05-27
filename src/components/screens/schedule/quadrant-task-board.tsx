@@ -8,6 +8,7 @@ import {
   getTaskTooltipPosition,
   type TaskTooltipPosition,
 } from "./task-hover-detail";
+import { useI18n } from "@/i18n/i18n-provider";
 import {
   MATRIX_GRID_ORDER,
   getQuadrantMeta,
@@ -40,21 +41,21 @@ function seededUnit(id: number, channel: number) {
   return x - Math.floor(x);
 }
 
-function taskDisplayText(text: string) {
+function taskDisplayText(text: string, taskLabel: string) {
   const trimmed = text.trim();
-  return trimmed || "任务";
+  return trimmed || taskLabel;
 }
 
-function computeBubbleSize(task: ScheduleTask, density: number) {
-  const chars = [...taskDisplayText(task.text)].length;
+function computeBubbleSize(task: ScheduleTask, density: number, taskLabel: string) {
+  const chars = [...taskDisplayText(task.text, taskLabel)].length;
   const durationBoost = Math.min(12, Math.floor(task.durationMinutes / 45) * 5);
   const lines = Math.ceil(chars / 3.5);
   const diameter = 28 + lines * 12 + Math.sqrt(chars) * 4 + durationBoost;
   return Math.round(Math.min(160, Math.max(52, diameter)) * density);
 }
 
-function bubbleLabelClass(size: number, text: string) {
-  const chars = [...taskDisplayText(text)].length;
+function bubbleLabelClass(size: number, text: string, taskLabel: string) {
+  const chars = [...taskDisplayText(text, taskLabel)].length;
   if (chars <= 6) return size >= 64 ? "text-[11px]" : "text-[10px]";
   if (chars <= 12) return "text-[10px]";
   if (chars <= 24) return "text-[9px]";
@@ -91,7 +92,11 @@ type BubbleLayout = {
   delay: number;
 };
 
-function layoutTaskBubbles(tasks: ScheduleTask[], quadrantKey: QuadrantKey): BubbleLayout[] {
+function layoutTaskBubbles(
+  tasks: ScheduleTask[],
+  quadrantKey: QuadrantKey,
+  taskLabel: string,
+): BubbleLayout[] {
   const offset = QUADRANT_LAYOUT_OFFSET[quadrantKey];
   const density = tasks.length > 6 ? 0.88 : tasks.length > 4 ? 0.94 : 1;
 
@@ -104,7 +109,7 @@ function layoutTaskBubbles(tasks: ScheduleTask[], quadrantKey: QuadrantKey): Bub
       taskId: task.id,
       x: Math.min(86, Math.max(14, (slot.x + jitterX + offset.x) * density)),
       y: Math.min(82, Math.max(18, (slot.y + jitterY + offset.y) * density)),
-      size: computeBubbleSize(task, density),
+      size: computeBubbleSize(task, density, taskLabel),
       rotate: (seededUnit(task.id, 3) - 0.5) * 10,
       delay: seededUnit(task.id, 4) * 2.5,
     };
@@ -121,8 +126,10 @@ type TaskBubbleProps = {
 };
 
 function TaskBubble({ task, layout, menuOpen, onMenuToggle, onEdit, onDelete }: TaskBubbleProps) {
+  const { t } = useI18n();
+  const taskLabel = t("common.task");
   const scheduled = isTaskScheduled(task);
-  const label = taskDisplayText(task.text);
+  const label = taskDisplayText(task.text, taskLabel);
   const anchorRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [tooltipPos, setTooltipPos] = useState<TaskTooltipPosition | null>(null);
@@ -180,7 +187,7 @@ function TaskBubble({ task, layout, menuOpen, onMenuToggle, onEdit, onDelete }: 
             className={[
               "block w-[92%] max-h-[88%] text-center font-black leading-tight select-none break-words whitespace-normal",
               scheduled ? "text-amber-950" : "text-slate-600",
-              bubbleLabelClass(layout.size, task.text),
+              bubbleLabelClass(layout.size, task.text, taskLabel),
             ].join(" ")}
             style={{ transform: `rotate(${-layout.rotate}deg)` }}
           >
@@ -202,7 +209,7 @@ function TaskBubble({ task, layout, menuOpen, onMenuToggle, onEdit, onDelete }: 
               className="w-full flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-50 border-b border-neutral-100"
             >
               <Pencil className="w-3.5 h-3.5" />
-              编辑
+              {t("common.edit")}
             </button>
             <button
               type="button"
@@ -242,8 +249,13 @@ function QuadrantPanel({
   onEdit,
   onDelete,
 }: QuadrantPanelProps) {
+  const { t } = useI18n();
   const meta = getQuadrantMeta(quadrantKey);
-  const layouts = useMemo(() => layoutTaskBubbles(tasks, quadrantKey), [tasks, quadrantKey]);
+  const taskLabel = t("common.task");
+  const layouts = useMemo(
+    () => layoutTaskBubbles(tasks, quadrantKey, taskLabel),
+    [tasks, quadrantKey, taskLabel],
+  );
   const layoutByTaskId = useMemo(() => new Map(layouts.map((l) => [l.taskId, l])), [layouts]);
 
   return (
@@ -276,7 +288,7 @@ function QuadrantPanel({
       >
         {tasks.length === 0 ? (
           <p className="absolute inset-0 flex items-center justify-center text-xs text-white/80 font-bold font-comic px-2 text-center">
-            暂无任务
+            {t("tasks.noTasksInQuadrant")}
           </p>
         ) : (
           tasks.map((task) => {
@@ -327,6 +339,7 @@ export function QuadrantTaskBoard({
   onEdit,
   onDelete,
 }: QuadrantTaskBoardProps) {
+  const { t } = useI18n();
   const tasksByQuadrant = MATRIX_GRID_ORDER.reduce(
     (acc, key) => {
       acc[key] = [];
@@ -366,7 +379,7 @@ export function QuadrantTaskBoard({
           fullscreen ? "text-amber-100/90 text-sm" : "text-sm text-neutral-500",
         ].join(" ")}
       >
-        还没有任务。去地图点击「创建任务」录入第一条。
+        {t("tasks.emptyBoard")}
       </p>
     );
   }
@@ -379,7 +392,7 @@ export function QuadrantTaskBoard({
           fullscreen ? "text-amber-100/90 text-sm" : "text-sm text-neutral-500",
         ].join(" ")}
       >
-        待办已全部完成
+        {t("tasks.allDone")}
       </p>
     );
   }
@@ -398,7 +411,7 @@ export function QuadrantTaskBoard({
           fullscreen ? "mb-2 sm:mb-3 text-base sm:text-xl" : "mb-2 md:mb-3 text-sm",
         ].join(" ")}
       >
-        重要
+        {t("tasks.matrixImportant")}
       </p>
 
       <MatrixScheduleLegend fullscreen={fullscreen} />
@@ -411,7 +424,7 @@ export function QuadrantTaskBoard({
             fullscreen ? "w-9 sm:w-10 text-sm sm:text-lg" : "w-6 text-xs",
           ].join(" ")}
         >
-          不紧急
+          {t("tasks.matrixNotUrgent")}
         </p>
 
         <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
@@ -450,7 +463,7 @@ export function QuadrantTaskBoard({
             fullscreen ? "w-9 sm:w-10 text-sm sm:text-lg" : "w-6 text-xs",
           ].join(" ")}
         >
-          紧急
+          {t("tasks.matrixUrgent")}
         </p>
       </div>
 
@@ -461,8 +474,8 @@ export function QuadrantTaskBoard({
           fullscreen ? "mt-3 text-sm sm:text-base" : "mt-3 md:mt-4 text-xs",
         ].join(" ")}
       >
-        <span>不紧急</span>
-        <span>紧急</span>
+        <span>{t("tasks.matrixNotUrgent")}</span>
+        <span>{t("tasks.matrixUrgent")}</span>
       </div>
 
       <p
@@ -472,13 +485,15 @@ export function QuadrantTaskBoard({
           fullscreen ? "mt-3 sm:mt-4 text-base sm:text-xl" : "mt-3 md:mt-4 text-sm",
         ].join(" ")}
       >
-        不重要
+        {t("tasks.matrixNotImportant")}
       </p>
     </div>
   );
 }
 
 function MatrixScheduleLegend({ fullscreen = false }: { fullscreen?: boolean }) {
+  const { t } = useI18n();
+
   return (
     <div
       className={[
@@ -487,7 +502,7 @@ function MatrixScheduleLegend({ fullscreen = false }: { fullscreen?: boolean }) 
           ? "mb-3 sm:mb-4 py-3 sm:py-3.5 px-4 rounded-2xl border-2 border-amber-300/50 bg-black/45 shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
           : "mb-3 md:mb-4 py-2.5 px-4 rounded-xl border-2 border-[#1C1917]/15 bg-white/80",
       ].join(" ")}
-      aria-label="任务排期状态图例"
+      aria-label={t("tasks.legendAria")}
     >
       <div className="flex items-center gap-3">
         <span
@@ -503,7 +518,7 @@ function MatrixScheduleLegend({ fullscreen = false }: { fullscreen?: boolean }) 
             fullscreen ? "text-sm sm:text-base text-amber-50 drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]" : "text-sm text-neutral-800",
           ].join(" ")}
         >
-          金色圆球 = 已排期
+          {t("tasks.legendScheduled")}
         </span>
       </div>
       <div className="flex items-center gap-3">
@@ -520,7 +535,7 @@ function MatrixScheduleLegend({ fullscreen = false }: { fullscreen?: boolean }) 
             fullscreen ? "text-sm sm:text-base text-amber-50 drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]" : "text-sm text-neutral-800",
           ].join(" ")}
         >
-          白色圆球 = 待排期
+          {t("tasks.legendPending")}
         </span>
       </div>
     </div>

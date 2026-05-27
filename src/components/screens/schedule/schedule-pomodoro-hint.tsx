@@ -1,4 +1,10 @@
-import { SCHEDULE_POMODORO_HINT } from "@/lib/ai/schedule-times";
+"use client";
+
+import {
+  POMODORO_BREAK_MINUTES,
+  POMODORO_FOCUS_MINUTES,
+} from "@/lib/ai/schedule-times";
+import { useI18n } from "@/i18n/i18n-provider";
 
 type SchedulePomodoroHintProps = {
   /** 深色磨砂背景上的横幅（AI 排期日历页） */
@@ -39,9 +45,14 @@ export function SchedulePomodoroHint({
   variant = "banner",
   className = "",
 }: SchedulePomodoroHintProps) {
+  const { t } = useI18n();
+
   return (
     <p className={[VARIANT_CLASS[variant], className].filter(Boolean).join(" ")}>
-      {SCHEDULE_POMODORO_HINT}
+      {t("calendar.pomodoroHint", {
+        focus: POMODORO_FOCUS_MINUTES,
+        break: POMODORO_BREAK_MINUTES,
+      })}
     </p>
   );
 }

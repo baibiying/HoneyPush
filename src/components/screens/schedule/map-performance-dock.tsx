@@ -8,6 +8,7 @@ import {
   GameScrollParchment,
   GameScrollWoodSeal,
 } from "@/components/screens/performance/game-scroll-ui";
+import { useI18n } from "@/i18n/i18n-provider";
 
 type MapPerformanceDockProps = {
   report: TaskPerformanceReport | null;
@@ -24,9 +25,11 @@ export function MapPerformanceDock({
   onOpenReport,
   onRequireLogin,
 }: MapPerformanceDockProps) {
+  const { t } = useI18n();
+
   const handleOpen = () => {
     if (!canEdit) {
-      onRequireLogin("登录后即可查看表现战报。");
+      onRequireLogin(t("prompts.performanceReport"));
       return;
     }
     onOpenReport();
@@ -49,29 +52,29 @@ export function MapPerformanceDock({
 
                 <div className="min-w-0 flex-1">
                   <p className="font-bangers text-xl sm:text-2xl text-[#2d1a0a] tracking-wide leading-none drop-shadow-[0_1px_0_rgba(255,255,255,0.2)]">
-                    战绩卷轴
+                    {t("performance.scrollTitle")}
                   </p>
                   <p className="mt-0.5 font-comic text-xs sm:text-sm font-bold text-[#3d2810]/80 truncate">
-                    {canEdit ? "点击展开卷轴 · 查看作战记录" : "登录后揭开卷轴"}
+                    {canEdit ? t("performance.hintCanEdit") : t("performance.hintGuest")}
                   </p>
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2 shrink-0">
                   <StatOrb
                     icon={<Trophy className="h-4 w-4" />}
-                    label="通关"
+                    label={t("performance.wins")}
                     value={loading ? "…" : String(report?.successCount ?? 0)}
                     tone="emerald"
                   />
                   <StatOrb
                     icon={<XCircle className="h-4 w-4" />}
-                    label="战败"
+                    label={t("performance.losses")}
                     value={loading ? "…" : String(report?.failureCount ?? 0)}
                     tone="rose"
                   />
                   <StatOrb
                     icon={<Coins className="h-4 w-4" />}
-                    label="币"
+                    label={t("performance.coins")}
                     value={loading ? "…" : String(report?.totalCoins ?? 0)}
                     tone="amber"
                   />

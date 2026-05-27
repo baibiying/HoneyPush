@@ -3,6 +3,7 @@ import "./globals.css";
 import { cn } from "@/utils/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { I18nProvider } from "@/i18n/i18n-provider";
 import { GlobalScheduledTaskRunner } from "@/components/layout/global-scheduled-task-runner";
 import { GlobalSupervisionTakeover } from "@/components/layout/global-supervision-takeover";
 import { GlobalUpcomingTaskToasts } from "@/components/layout/global-upcoming-task-toasts";
@@ -66,15 +67,17 @@ export default function RootLayout({
         />
       </head>
       <body className="comic-bg-pattern min-h-svh flex flex-col">
-        <AuthProvider>
-          <GlobalUpcomingTaskToasts />
-          <GlobalScheduledTaskRunner />
-          <GlobalSupervisionTakeover />
-          <main className="flex-1 pb-[80px] md:pb-[96px]">
-            <MainContentShell>{children}</MainContentShell>
-          </main>
-          <Toaster />
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <GlobalUpcomingTaskToasts />
+            <GlobalScheduledTaskRunner />
+            <GlobalSupervisionTakeover />
+            <main className="flex-1 pb-[80px] md:pb-[96px]">
+              <MainContentShell>{children}</MainContentShell>
+            </main>
+            <Toaster />
+          </AuthProvider>
+        </I18nProvider>
       </body>
     </html>
   );

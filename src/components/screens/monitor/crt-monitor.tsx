@@ -67,6 +67,11 @@ import type {
   EnrollmentPhase,
   TrackerDetectionStatus,
 } from "@/lib/face-tracking/types";
+import { useI18n } from "@/i18n/i18n-provider";
+import {
+  translateDistractionOrHint,
+  translatePoseHint,
+} from "@/lib/monitor-i18n";
 
 export type CrtMonitorHandle = {
   startCamera: () => Promise<void>;
@@ -145,12 +150,13 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   },
   ref
 ) {
+  const { t } = useI18n();
   const isYuriOfficer = officerId === "yuri";
   const [cameraActive, setCameraActive] = useState(false);
   const [enrollmentPhase, setEnrollmentPhase] = useState<EnrollmentPhase>("pending");
   const [enrollmentProgress, setEnrollmentProgress] = useState(0);
-  const [enrollmentHint, setEnrollmentHint] = useState(
-    "请把摄像头摆在能拍到你脸部、双手与桌面的位置"
+  const [enrollmentHint, setEnrollmentHint] = useState(() =>
+    t("monitor.enrollment.cameraPlacement")
   );
   const [enrollmentPoseOk, setEnrollmentPoseOk] = useState(false);
   const [enrollmentTimeLeftSec, setEnrollmentTimeLeftSec] = useState(
@@ -230,7 +236,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     episodeLevelRef.current = 0;
     setEnrollmentProgress(0);
     setEnrollmentPhase("pending");
-    setEnrollmentHint("请把摄像头摆在能拍到你脸部、双手与桌面的位置");
+    setEnrollmentHint(t("monitor.enrollment.cameraPlacement"));
     setEnrollmentPoseOk(false);
     enrollmentBadFramesRef.current = 0;
     handsSkinBaselineRef.current = null;
@@ -280,7 +286,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     setEnrollmentPoseOk(false);
     setEnrollmentPhase("enrolling");
     setDetectionStatus("enrolling");
-    setEnrollmentHint("请把摄像头摆在能拍到你脸部、双手与桌面的位置");
+    setEnrollmentHint(t("monitor.enrollment.cameraPlacement"));
     setUserFaceMatched(false);
 
     if (isYuriOfficer) {
@@ -314,7 +320,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     } catch (e) {
       console.error("[face-api] 模型加载失败:", e);
       setEnrollmentPhase("failed");
-      onEnrollmentFailedRef.current?.("AI 人脸模型加载失败，无法采集");
+      onEnrollmentFailedRef.current?.(t("monitor.crt.modelLoadFail"));
       return false;
     }
   }, []);
@@ -329,13 +335,13 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       setDetectionStatus("detecting");
       setEnrollmentHint(
         isYuriOfficer
-          ? "人脸采集成功，正在播放开场白…"
-          : "人脸采集成功，监督已开始"
+          ? t("monitor.enrollment.successIntro")
+          : t("monitor.enrollment.successStarted")
       );
       setEnrollmentPoseOk(true);
       notifyEnrollmentReady();
     }
-  }, [isYuriOfficer, notifyEnrollmentReady]);
+  }, [isYuriOfficer, notifyEnrollmentReady, t]);
 
   const computeTargetLevel = useCallback((): DistractionLevel | 0 => {
     const now = Date.now();
@@ -524,7 +530,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           video.videoWidth,
           video.videoHeight
         );
-        setEnrollmentHint(pose.hint);
+        setEnrollmentHint(translatePoseHint(pose.issue, pose.hint, t));
         setEnrollmentPoseOk(pose.ok);
 
         if (!pose.ok) {
@@ -537,7 +543,9 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             enrollmentBadFramesRef.current = 0;
             handsSkinBaselineRef.current = null;
             setEnrollmentProgress(0);
-            setEnrollmentHint(`${pose.hint}（姿势变化，请重新调整）`);
+            setEnrollmentHint(
+              `${translatePoseHint(pose.issue, pose.hint, t)}${t("monitor.pose.poseChangedSuffix")}`
+            );
           }
           return;
         }
@@ -605,7 +613,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   const handleYuriIntroComplete = useCallback(() => {
     yuriSupervisionEnabledRef.current = true;
     setYuriSupervisionEnabled(true);
-    setEnrollmentHint("开场白结束，监督已开始");
+    setEnrollmentHint(t("monitor.enrollment.introDone"));
   }, []);
 
   const handleYuriActiveClipChange = useCallback((clip: YuriActiveClip) => {
@@ -696,7 +704,11 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         notifyEnrollmentReady();
       }
     } catch (error) {
-      alert(`摄像头启动失败：${error instanceof Error ? error.message : "未知错误"}`);
+      alert(
+        t("monitor.crt.cameraFailAlert", {
+          message: error instanceof Error ? error.message : t("monitor.crt.cameraFailUnknown"),
+        })
+      );
       cameraActiveRef.current = false;
       setCameraActive(false);
       throw error;
@@ -835,39 +847,41 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     isDistracted && (!isYuriOfficer || yuriDistractionBannerVisible);
 
   const statusLabel = () => {
-    if (!cameraActive) return { text: "摄像头未激活", color: "text-stone-400" };
+    if (!cameraActive) return { text: t("monitor.crt.statusInactive"), color: "text-stone-400" };
     if (useLegacyFaceCount) {
-      return { text: "兼容模式·任意人脸", color: "text-amber-300" };
+      return { text: t("monitor.crt.statusLegacy"), color: "text-amber-300" };
     }
     switch (detectionStatus) {
       case "loading":
-        return { text: "AI 模型加载中…", color: "text-yellow-300" };
+        return { text: t("monitor.crt.statusLoading"), color: "text-yellow-300" };
       case "enrolling":
         return {
-          text: `登记本人 ${enrollmentProgress}%`,
+          text: t("monitor.crt.statusEnrolling", { progress: enrollmentProgress }),
           color: "text-cyan-300",
         };
       case "detecting":
       case "face-ok":
         if (phoneModelsLoading) {
-          return { text: "手机检测模型加载中…", color: "text-yellow-300" };
+          return { text: t("monitor.crt.statusPhoneLoading"), color: "text-yellow-300" };
         }
         if (!phoneDetectorReady) {
           return {
-            text: phoneLoadError ? "手机检测未就绪" : "手机检测加载失败",
+            text: phoneLoadError
+              ? t("monitor.crt.statusPhoneNotReady")
+              : t("monitor.crt.statusPhoneFailed"),
             color: "text-rose-400",
           };
         }
         return {
-          text: userFaceMatched ? "本人 ✓" : "扫描中…",
+          text: userFaceMatched ? t("monitor.crt.statusMatched") : t("monitor.crt.statusScanning"),
           color: "text-emerald-400",
         };
       case "framing-bad":
-        return { text: "⚠ 构图丢失", color: "text-rose-400" };
+        return { text: t("monitor.crt.statusFramingLost"), color: "text-rose-400" };
       case "phone":
-        return { text: "⚠ 画面中出现手机", color: "text-amber-400" };
+        return { text: t("monitor.crt.statusPhoneVisible"), color: "text-amber-400" };
       default:
-        return { text: "初始化中…", color: "text-stone-400" };
+        return { text: t("monitor.crt.statusInit"), color: "text-stone-400" };
     }
   };
   const { text: statusText, color: statusColor } = statusLabel();
@@ -942,22 +956,22 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           >
             <div className="w-full max-w-lg comic-border-2 border-rose-500 bg-rose-950/92 px-3 py-3 sm:px-4 sm:py-4 text-left shadow-[0_6px_0_#1c1917] backdrop-blur-[2px]">
               <p className="font-bangers text-xl sm:text-2xl tracking-wide text-rose-300 animate-pulse">
-                摸鱼警报
+                {t("monitor.crt.slackingAlert")}
                 {isYuriOfficer && yuriStrikeCount > 0 && (
                   <span className="ml-2 text-base sm:text-lg font-mono text-rose-200/90">
-                    第 {yuriStrikeCount}/3 次
+                    {t("monitor.crt.strikeCount", { current: yuriStrikeCount })}
                   </span>
                 )}
               </p>
               <p className="mt-1.5 sm:mt-2 text-sm sm:text-base font-bold leading-snug text-white line-clamp-3">
-                {mockEventText}
+                {translateDistractionOrHint(mockEventText, t)}
               </p>
               <p className="mt-1.5 text-xs sm:text-sm font-mono text-rose-200/85">
                 {isYuriOfficer
                   ? yuriStrikeCount >= 3
-                    ? "三次摸鱼，任务即将判定失败"
-                    : "纠正后将继续巡视督促"
-                  : `${activeOfficer.name} 正在督促 · 纠正后警报将自动解除`}
+                    ? t("monitor.crt.thirdStrikeFail")
+                    : t("monitor.crt.correctToContinue")
+                  : t("monitor.crt.officerUrging", { name: activeOfficer.name })}
               </p>
             </div>
           </div>
@@ -976,17 +990,17 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
               {activeOfficer.name} ·{" "}
               {isYuriOfficer
                 ? !yuriSupervisionEnabled
-                  ? "开场白"
+                  ? t("monitor.crt.intro")
                   : showDistractionBanner || isDistracted
-                    ? "摸鱼警报"
-                    : "专注陪伴"
+                    ? t("monitor.crt.slackingAlert")
+                    : t("monitor.crt.focusCompanion")
                 : showDistractionBanner || isDistracted
-                  ? "摸鱼警报"
-                  : "专注陪伴"}
+                  ? t("monitor.crt.slackingAlert")
+                  : t("monitor.crt.focusCompanion")}
             </span>
             {!showDistractionBanner && !isDistracted && yuriSupervisionEnabled && (
               <span className="text-emerald-400/90 font-mono text-[10px] hidden sm:inline">
-                正常督促中
+                {t("monitor.crt.normalSupervision")}
               </span>
             )}
           </div>
@@ -1015,7 +1029,9 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           {!cameraActive && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-stone-900 p-2 text-center">
               <Camera className="w-6 h-6 text-stone-600 mb-1" />
-              <span className="text-[9px] text-stone-500 font-mono leading-tight">实景镜头</span>
+              <span className="text-[9px] text-stone-500 font-mono leading-tight">
+                {t("monitor.crt.liveFeed")}
+              </span>
             </div>
           )}
           {cameraActive && (
@@ -1037,7 +1053,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             (enrollmentPhase === "ready" || useLegacyFaceCount) &&
             phoneDetectorReady && (
               <p className="absolute bottom-0.5 left-0 right-0 text-center text-[7px] font-mono text-stone-400 pointer-events-none">
-                手机识别 {(phoneBestScore * 100).toFixed(0)}%
+                {t("monitor.crt.phoneScore", { score: (phoneBestScore * 100).toFixed(0) })}
               </p>
             )}
           {cameraActive &&
@@ -1045,7 +1061,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             !phoneDetectorReady &&
             (enrollmentPhase === "ready" || useLegacyFaceCount) && (
               <p className="absolute bottom-0.5 left-0 right-0 text-center text-[7px] font-mono text-rose-400/90 pointer-events-none px-1">
-                手机检测未加载
+                {t("monitor.crt.phoneModelMissing")}
               </p>
             )}
         </div>
@@ -1053,7 +1069,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         {!cameraActive && (
           <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center p-4 pointer-events-none bg-black/40">
             <p className="text-sm px-6 text-stone-300 text-center leading-relaxed max-w-md drop-shadow">
-              点击底部开启实景摄像头。右下角将显示你的画面，主画面为监督官视频。
+              {t("monitor.crt.cameraOffHint")}
             </p>
           </div>
         )}
@@ -1063,15 +1079,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             <div className="w-full max-w-md comic-border-2 border-cyan-400 bg-stone-950/95 px-5 py-6 sm:px-8 sm:py-8 text-center shadow-[0_6px_0_#22d3ee]">
               <ScanFace className="mx-auto mb-3 h-12 w-12 sm:h-14 sm:w-14 text-cyan-300 animate-pulse" />
               <p className="font-bangers text-2xl sm:text-3xl tracking-wide text-cyan-200">
-                摄像头已开启
+                {t("monitor.crt.cameraOnTitle")}
               </p>
               <p className="mt-3 text-base sm:text-lg font-bold leading-relaxed text-amber-50">
-                请把摄像头摆在能拍到你
-                <span className="text-cyan-300">脸部、双手与桌面</span>
-                的位置
+                {t("monitor.crt.cameraPlacementBefore")}
+                <span className="text-cyan-300">{t("monitor.crt.cameraPlacementHighlight")}</span>
+                {t("monitor.crt.cameraPlacementAfter")}
               </p>
               <p className="mt-2 text-sm sm:text-base text-stone-300 leading-relaxed">
-                这样监督官才能正确判断你是否在认真劳动。AI 模型加载中，请稍候…
+                {t("monitor.crt.cameraPlacementWhy")}
               </p>
               <div className="mt-5 flex justify-center">
                 <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-cyan-400 border-t-transparent" />
@@ -1085,15 +1101,15 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             <div className="w-full max-w-lg comic-border-2 border-amber-400 bg-stone-950/95 px-5 py-6 sm:px-8 sm:py-8 text-center shadow-[0_6px_0_#fbbf24]">
               <ScanFace className="mx-auto mb-3 h-14 w-14 sm:h-16 sm:w-16 text-amber-300" />
               <p className="font-bangers text-3xl sm:text-4xl tracking-wide text-amber-200">
-                人脸采集
+                {t("monitor.crt.faceEnrollment")}
               </p>
               <p className="mt-4 text-lg sm:text-xl font-bold text-white leading-relaxed">
-                请把摄像头摆在能拍到你
-                <span className="text-cyan-300">脸部、双手与桌面</span>
-                的位置
+                {t("monitor.crt.cameraPlacementBefore")}
+                <span className="text-cyan-300">{t("monitor.crt.cameraPlacementHighlight")}</span>
+                {t("monitor.crt.cameraPlacementAfter")}
               </p>
               <p className="mt-3 text-base sm:text-lg text-amber-100/95 leading-relaxed">
-                这样监督官才能正确判断你是否在认真劳动
+                {t("monitor.crt.cameraPlacementWhyShort")}
               </p>
               <div
                 className={[
@@ -1119,15 +1135,17 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
                 />
               </div>
               <p className="mt-3 font-mono text-lg sm:text-xl font-bold tabular-nums text-cyan-300">
-                {enrollmentPoseOk ? `采集进度 ${enrollmentProgress}%` : "等待姿势就绪…"}
+                {enrollmentPoseOk
+                  ? t("monitor.crt.collectingProgress", { progress: enrollmentProgress })
+                  : t("monitor.crt.waitingPose")}
               </p>
               <p className="mt-2 text-xs sm:text-sm text-stone-400">
-                请在{" "}
+                {t("monitor.crt.enrollmentDeadlinePrefix")}
                 <span className="text-rose-400 font-bold tabular-nums">
                   {Math.floor(enrollmentTimeLeftSec / 60)}:
                   {(enrollmentTimeLeftSec % 60).toString().padStart(2, "0")}
-                </span>{" "}
-                内完成采集，否则任务将记为执行失败
+                </span>
+                {t("monitor.crt.enrollmentDeadline")}
               </p>
             </div>
           </div>
@@ -1194,16 +1212,18 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
           className="flex-1 comic-border-2 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600 text-white font-bold py-1.5 px-3 text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
           <Camera className={`w-3.5 h-3.5 ${cameraActive ? "text-rose-400" : "text-emerald-400"}`} />
-          <span>{cameraActive ? "关闭镜头（记为失败）" : "开启实景摄像头"}</span>
+          <span>
+            {cameraActive ? t("monitor.crt.closeCameraFail") : t("monitor.crt.openCamera")}
+          </span>
         </button>
         <div className="text-[10px] text-stone-400 font-mono px-2 bg-stone-950 rounded border border-stone-800 py-1 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
           <span>
             {cameraActive && modelLoaded
               ? enrollmentPhase === "ready"
-                ? "本人识别运行中"
-                : "face-api.js 运行中"
-              : "1950s 波普滤镜挂载中"}
+                ? t("monitor.crt.trackerReady")
+                : t("monitor.crt.trackerFaceApi")
+              : t("monitor.crt.trackerFilter")}
           </span>
         </div>
       </div>

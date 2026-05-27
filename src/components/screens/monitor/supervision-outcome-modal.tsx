@@ -16,11 +16,12 @@ import {
 } from "lucide-react";
 import type { SupervisionOutcomeModalState } from "@/lib/supervision-outcome";
 import type { SupervisionOutcomeStats } from "@/lib/supervision-outcome";
+import type { TaskFailureCause } from "@/lib/supervision-outcome";
 import {
-  getTaskFailureCauseDisplay,
-  resolveTaskFailureCause,
-  type TaskFailureCause,
-} from "@/lib/supervision-outcome";
+  getTaskFailureCauseDisplayLocalized,
+  resolveTaskFailureCauseBilingual,
+} from "@/lib/monitor-i18n";
+import { useI18n } from "@/i18n/i18n-provider";
 import { SUPERVISION_MAX_STRIKES } from "@/lib/supervision-blocks";
 
 type SupervisionOutcomeModalProps = {
@@ -80,6 +81,7 @@ function GameStatPill({
 }
 
 function DistractionBattleLog({ stats }: { stats: SupervisionOutcomeStats }) {
+  const { t } = useI18n();
   const list = stats.distractions;
   const throughBlock = stats.currentBlockNumber;
 
@@ -87,8 +89,8 @@ function DistractionBattleLog({ stats }: { stats: SupervisionOutcomeStats }) {
     return (
       <p className="text-center text-lg sm:text-xl font-bold text-emerald-200/90 py-6">
         {throughBlock > 1
-          ? `第 1～${throughBlock} 段均无摸鱼，尤里教官无话可说。`
-          : "本段零摸鱼，尤里教官无话可说。"}
+          ? t("monitor.stats.noSlackingRange", { through: throughBlock })
+          : t("monitor.stats.noSlackingSingle")}
       </p>
     );
   }
@@ -105,7 +107,11 @@ function DistractionBattleLog({ stats }: { stats: SupervisionOutcomeStats }) {
           </span>
           <div className="min-w-0 flex-1 text-left">
             <p className="font-bangers text-lg sm:text-xl text-rose-200 tracking-wide">
-              任务第 {item.blockNumber}/{stats.totalBlocks} 段 · 本段第 {item.strikeIndexInBlock} 次摸鱼
+              {t("monitor.stats.slackingEntry", {
+                block: item.blockNumber,
+                total: stats.totalBlocks,
+                strike: item.strikeIndexInBlock,
+              })}
             </p>
             <p className="mt-1 text-base sm:text-lg font-bold text-white/95 leading-snug">
               {item.reason}
@@ -133,14 +139,15 @@ function FailureCausePanel({
 }: {
   failReason: string;
 }) {
-  const cause = resolveTaskFailureCause(failReason);
-  const display = getTaskFailureCauseDisplay(cause);
+  const { t } = useI18n();
+  const cause = resolveTaskFailureCauseBilingual(failReason);
+  const display = getTaskFailureCauseDisplayLocalized(cause, t);
   const CauseIcon = FAILURE_CAUSE_ICON[cause];
 
   return (
     <GameHudPanel className="p-5 sm:p-6 border-rose-400/60 bg-gradient-to-br from-rose-950/90 via-red-950/70 to-black/60">
       <p className="text-xs sm:text-sm font-black uppercase tracking-[0.25em] text-rose-200/80 mb-3">
-        任务失败原因
+        {t("monitor.stats.failReasonTitle")}
       </p>
       <div className="flex gap-4 sm:gap-5 items-start">
         <span className="flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-xl border-[3px] border-rose-300/50 bg-rose-600/40 comic-shadow">
@@ -155,7 +162,7 @@ function FailureCausePanel({
           </p>
           {failReason !== display.headline && (
             <p className="mt-3 rounded-lg border border-rose-400/30 bg-black/30 px-3 py-2 text-sm sm:text-base text-rose-100/90">
-              系统记录：{failReason}
+              {t("monitor.systemRecord", { reason: failReason })}
             </p>
           )}
         </div>
@@ -165,11 +172,13 @@ function FailureCausePanel({
 }
 
 function GameOutcomeStats({ stats, showCoins }: { stats: SupervisionOutcomeStats; showCoins?: boolean }) {
+  const { t } = useI18n();
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-3 sm:gap-4 justify-center">
         <GameStatPill
-          label="任务段"
+          label={t("monitor.stats.block")}
           value={
             <>
               {stats.currentBlockNumber}
@@ -180,19 +189,19 @@ function GameOutcomeStats({ stats, showCoins }: { stats: SupervisionOutcomeStats
           icon={<Target className="h-4 w-4" />}
         />
         <GameStatPill
-          label="本段摸鱼"
+          label={t("monitor.stats.slackingBlock")}
           value={stats.distractionsInBlock}
           accent="rose"
           icon={<AlertTriangle className="h-4 w-4" />}
         />
         <GameStatPill
-          label="累计摸鱼"
+          label={t("monitor.stats.slackingTotal")}
           value={stats.distractionsCumulative}
           accent="rose"
           icon={<ListOrdered className="h-4 w-4" />}
         />
         <GameStatPill
-          label="本段剩余星"
+          label={t("monitor.stats.starsLeft")}
           value={
             <span className="inline-flex items-center gap-2">
               {stats.starsRemaining}
@@ -203,7 +212,7 @@ function GameOutcomeStats({ stats, showCoins }: { stats: SupervisionOutcomeStats
           icon={<Star className="h-4 w-4 fill-amber-300" />}
         />
         <GameStatPill
-          label="累计获得星星"
+          label={t("monitor.stats.starsEarned")}
           value={stats.starsEarnedCumulative}
           accent="amber"
           icon={<Sparkles className="h-4 w-4 text-amber-200" />}
@@ -215,16 +224,16 @@ function GameOutcomeStats({ stats, showCoins }: { stats: SupervisionOutcomeStats
           <Swords className="h-5 w-5 text-rose-300" />
           <div className="min-w-0">
             <h3 className="font-bangers text-2xl sm:text-3xl text-rose-100 tracking-wide">
-              摸鱼战报
+              {t("monitor.stats.battleLog")}
             </h3>
             {stats.currentBlockNumber > 1 && (
               <p className="text-xs sm:text-sm font-bold text-rose-200/70">
-                第 1～{stats.currentBlockNumber} 段累计
+                {t("monitor.stats.cumulativeThrough", { through: stats.currentBlockNumber })}
               </p>
             )}
           </div>
           <span className="ml-auto font-mono text-sm sm:text-base font-bold text-rose-200/80 tabular-nums shrink-0">
-            共 {stats.distractionsCumulative} 次
+            {t("monitor.stats.totalTimes", { count: stats.distractionsCumulative })}
           </span>
         </div>
         <DistractionBattleLog stats={stats} />
@@ -239,19 +248,19 @@ function GameOutcomeStats({ stats, showCoins }: { stats: SupervisionOutcomeStats
               : "bg-gradient-to-b from-stone-500/20 to-transparent border-stone-500/40",
           ].join(" ")}
         >
-          <p className="text-sm font-black uppercase tracking-widest text-amber-200/90">战利品</p>
+          <p className="text-sm font-black uppercase tracking-widest text-amber-200/90">
+            {t("monitor.stats.loot")}
+          </p>
           <p
             className={[
               "font-bangers text-4xl sm:text-5xl mt-1",
               stats.coinsEarned > 0 ? "text-amber-300" : "text-stone-400",
             ].join(" ")}
           >
-            +{stats.coinsEarned} 专注币
+            {t("monitor.stats.coins", { count: stats.coinsEarned })}
           </p>
           {stats.coinsEarned === 0 && (
-            <p className="mt-2 text-sm font-bold text-stone-400">
-              任务未成功完成，本次不获得专注币
-            </p>
+            <p className="mt-2 text-sm font-bold text-stone-400">{t("monitor.stats.noCoins")}</p>
           )}
         </GameHudPanel>
       )}
@@ -264,6 +273,8 @@ export function SupervisionOutcomeModal({
   onDismiss,
   onStartBreak,
 }: SupervisionOutcomeModalProps) {
+  const { t } = useI18n();
+
   if (!outcome) return null;
 
   const isSuccess =
@@ -272,7 +283,7 @@ export function SupervisionOutcomeModal({
 
   let title = "";
   let subtitle = "";
-  let primaryLabel = "知道了";
+  let primaryLabel = t("monitor.gotIt");
   let onPrimary = onDismiss;
   let headerGradient = isSuccess
     ? "from-emerald-600 via-emerald-700 to-teal-900"
@@ -280,32 +291,41 @@ export function SupervisionOutcomeModal({
 
   switch (outcome.kind) {
     case "block-success": {
-      title = "本段专注完成！";
+      title = t("monitor.outcome.blockSuccessTitle");
       const breakMin = Math.max(1, Math.ceil(outcome.breakSecondsUntilNext / 60));
       if (outcome.breakSecondsUntilNext > 0) {
-        subtitle = `第 ${outcome.stats.currentBlockNumber} 段已拿下。休息约 ${breakMin} 分钟后，${outcome.nextBlockLabel} 将于 ${outcome.nextBlockStartLabel} 自动开战。`;
-        primaryLabel = "知道了，开始休息";
+        subtitle = t("monitor.outcome.blockSuccessBreak", {
+          block: outcome.stats.currentBlockNumber,
+          breakMin,
+          nextLabel: outcome.nextBlockLabel,
+          startTime: outcome.nextBlockStartLabel,
+        });
+        primaryLabel = t("monitor.outcome.startBreak");
         onPrimary = onStartBreak ?? onDismiss;
       } else {
-        subtitle = `第 ${outcome.stats.currentBlockNumber} 段已完成，下一段可以立即开始。`;
-        primaryLabel = "开始下一段";
+        subtitle = t("monitor.outcome.blockSuccessImmediate", {
+          block: outcome.stats.currentBlockNumber,
+        });
+        primaryLabel = t("monitor.outcome.startNextBlock");
         onPrimary = onStartBreak ?? onDismiss;
       }
       headerGradient = "from-emerald-500 via-emerald-600 to-teal-900";
       break;
     }
     case "block-fail":
-      title = "本段战败";
-      subtitle = "任务已终止。请查看下方失败原因与摸鱼战报。";
+      title = t("monitor.outcome.blockFailTitle");
+      subtitle = t("monitor.outcome.blockFailSubtitle");
       break;
     case "task-success":
-      title = "任务通关！";
-      subtitle = `全部 ${outcome.stats.totalBlocks} 段专注已完成，尤里教官勉强认可了你。`;
+      title = t("monitor.outcome.taskSuccessTitle");
+      subtitle = t("monitor.outcome.taskSuccessSubtitle", {
+        total: outcome.stats.totalBlocks,
+      });
       headerGradient = "from-amber-500 via-emerald-600 to-teal-900";
       break;
     case "task-fail":
-      title = "任务失败";
-      subtitle = "请查看下方失败原因与执行统计，调整后重新排期再战。";
+      title = t("monitor.outcome.taskFailTitle");
+      subtitle = t("monitor.outcome.taskFailSubtitle");
       break;
   }
 
@@ -380,22 +400,26 @@ export function SupervisionOutcomeModal({
           <div className="mx-auto max-w-4xl space-y-6 sm:space-y-8">
             <GameHudPanel className="p-4 sm:p-6 border-amber-400/30">
               <p className="text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-amber-200/70">
-                当前任务
+                {t("monitor.currentTask")}
               </p>
               <p className="mt-1 font-bangers text-2xl sm:text-3xl md:text-4xl text-white tracking-wide leading-tight">
                 {outcome.stats.taskText}
               </p>
               <p className="mt-2 text-base sm:text-lg font-bold text-violet-200/90">
-                监督官 · {outcome.stats.officerName}
+                {t("monitor.officerLine", { name: outcome.stats.officerName })}
               </p>
             </GameHudPanel>
 
             {outcome.kind === "block-success" && outcome.breakSecondsUntilNext > 0 && (
               <GameHudPanel className="p-4 sm:p-5 border-amber-400/50 bg-amber-500/15 text-center">
-                <p className="font-bangers text-2xl sm:text-3xl text-amber-200">段间休整</p>
+                <p className="font-bangers text-2xl sm:text-3xl text-amber-200">
+                  {t("monitor.outcome.intermission")}
+                </p>
                 <p className="mt-2 text-lg sm:text-xl font-bold text-white/90">
-                  约 {Math.ceil(outcome.breakSecondsUntilNext / 60)} 分钟后 · {outcome.nextBlockStartLabel}{" "}
-                  开战
+                  {t("monitor.outcome.intermissionCountdown", {
+                    minutes: Math.ceil(outcome.breakSecondsUntilNext / 60),
+                    startTime: outcome.nextBlockStartLabel,
+                  })}
                 </p>
               </GameHudPanel>
             )}
@@ -408,7 +432,7 @@ export function SupervisionOutcomeModal({
 
             {"recordSaved" in outcome && !outcome.recordSaved && (
               <p className="text-center text-base sm:text-lg font-bold text-amber-300">
-                记录未能保存到服务器，请检查网络。
+                {t("monitor.recordSaveFailed")}
               </p>
             )}
           </div>

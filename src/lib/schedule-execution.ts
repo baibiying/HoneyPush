@@ -80,6 +80,30 @@ export function getExecuteBlockedMessage(task: ScheduledTaskLike, now = new Date
   return null;
 }
 
+export type ReminderTranslateFn = (
+  path: string,
+  params?: Record<string, string | number>
+) => string;
+
+export function formatMinutesUntilStartLocalized(
+  task: ScheduledTaskLike,
+  t: ReminderTranslateFn,
+  now = new Date()
+) {
+  const start = new Date(task.scheduledStartAt!);
+  const diffMs = start.getTime() - now.getTime();
+  if (diffMs <= 0) return t("reminder.countdownStarted");
+  const minutes = Math.ceil(diffMs / 60_000);
+  if (minutes < 60) return t("reminder.countdownInMinutes", { minutes });
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (rest > 0) {
+    return t("reminder.countdownInHoursMinutes", { hours, rest });
+  }
+  return t("reminder.countdownInHours", { hours });
+}
+
+/** @deprecated Prefer {@link formatMinutesUntilStartLocalized} with i18n */
 export function formatMinutesUntilStart(task: ScheduledTaskLike, now = new Date()) {
   const start = new Date(task.scheduledStartAt!);
   const diffMs = start.getTime() - now.getTime();

@@ -9,6 +9,7 @@ import {
   type ScheduledTaskLike,
 } from "@/lib/schedule-execution";
 import { isTaskReminderDismissed } from "@/lib/task-reminder-dismissals";
+import { useI18n } from "@/i18n/i18n-provider";
 
 const REMINDER_STORAGE_KEY = "honeypush-task-reminder-sent-v1";
 
@@ -41,6 +42,7 @@ export function useScheduleTaskReminders({
   enabled = true,
   enableBrowserNotification = true,
 }: UseScheduleTaskRemindersOptions) {
+  const { t } = useI18n();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const sentKeysRef = useRef<Set<string>>(loadSentReminderKeys());
   const notificationRequestedRef = useRef(false);
@@ -107,13 +109,16 @@ export function useScheduleTaskReminders({
       if (sentKeysRef.current.has(key)) continue;
       sentKeysRef.current.add(key);
       notifyBrowser(
-        "任务即将开始",
-        `「${task.text}」将在 ${TASK_REMINDER_LEAD_MINUTES} 分钟内开始，请做好准备。`
+        t("reminder.notifyUpcomingTitle"),
+        t("reminder.notifyUpcomingBody", {
+          task: task.text,
+          minutes: TASK_REMINDER_LEAD_MINUTES,
+        })
       );
     }
 
     saveSentReminderKeys(sentKeysRef.current);
-  }, [enabled, upcoming, notifyBrowser, enableBrowserNotification]);
+  }, [enabled, upcoming, notifyBrowser, enableBrowserNotification, t]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -122,12 +127,12 @@ export function useScheduleTaskReminders({
       if (sentKeysRef.current.has(key)) continue;
       sentKeysRef.current.add(key);
       notifyBrowser(
-        "任务已到开始时间",
-        `「${task.text}」已开始，将自动进入监督并开启摄像头`
+        t("reminder.notifyActiveTitle"),
+        t("reminder.notifyActiveBody", { task: task.text })
       );
     }
     saveSentReminderKeys(sentKeysRef.current);
-  }, [active, enabled, notifyBrowser]);
+  }, [active, enabled, notifyBrowser, t]);
 
   return { now, upcoming, active };
 }

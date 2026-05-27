@@ -5,7 +5,6 @@ import { AnimatePresence } from "framer-motion";
 import { OFFICERS, type OfficerId } from "@/lib/officers-data";
 import {
   ENROLLMENT_TIMEOUT_MS,
-  formatEnrollmentTimeoutLabel,
 } from "@/lib/face-tracking/config";
 import type { DistractionEvent, DistractionLevel } from "@/lib/face-tracking/types";
 import { readPreferredOfficer, setPreferredOfficer } from "@/lib/preferred-officer";
@@ -33,8 +32,6 @@ import { recordTaskExecutionFailure, recordTaskExecutionSuccess } from "@/lib/re
 import { computeFocusCoinsEarned } from "@/lib/supervision-rewards";
 import {
   SUPERVISION_MAX_STRIKES,
-  formatBlockLabel,
-  formatBlockStartTime,
   getBlockSecondsRemaining,
   getSecondsUntilBlockStart,
   isSupervisionBlockFailed,
@@ -57,6 +54,14 @@ import {
 } from "@/lib/supervision-fullscreen";
 import { primeUnmutedVideoPlayback } from "@/lib/unlock-browser-audio";
 import { YURI_SUPERVISION_VIDEOS } from "@/lib/officers/yuri-supervision-videos";
+import { useI18n } from "@/i18n/i18n-provider";
+import {
+  formatBlockLabelLocalized,
+  formatBlockStartTimeLocalized,
+  formatBreakDurationHintLocalized,
+  formatEnrollmentTimeoutLabelLocalized,
+  translateDistractionOrHint,
+} from "@/lib/monitor-i18n";
 
 type LogEntry = { time: string; text: string; type: "normal" | "warning" | "success" };
 type Task = {
@@ -72,8 +77,8 @@ type Task = {
 
 const DEFAULT_FOCUS_SECONDS = SUPERVISION_FOCUS_BLOCK_MINUTES * 60;
 
-function getNowStr() {
-  return new Date().toLocaleTimeString("zh-CN", { hour12: false });
+function getNowStr(dateLocale: string) {
+  return new Date().toLocaleTimeString(dateLocale, { hour12: false });
 }
 
 const PRIORITY_ORDER = [
@@ -121,6 +126,8 @@ function playChime() {
 
 /** 仅由全站监督叠层挂载；任务到点自动弹出 */
 export function MonitorScreen() {
+  const { t, locale } = useI18n();
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
   const { user, loading: authLoading } = useAuth();
   const [currentOfficerId, setCurrentOfficerId] = useState<OfficerId>("yuri");
   const [focusSeconds, setFocusSeconds] = useState(DEFAULT_FOCUS_SECONDS);
@@ -130,15 +137,13 @@ export function MonitorScreen() {
   const [blockEnrollmentReady, setBlockEnrollmentReady] = useState(false);
   const [isDistracted, setIsDistracted] = useState(false);
   const [distractionLevel, setDistractionLevel] = useState<DistractionLevel>(1);
-  const [mockEventText, setMockEventText] = useState("一切正常");
+  const [mockEventText, setMockEventText] = useState("");
   const [distractionCount, setDistractionCount] = useState(0);
   const [distractionPlayKey, setDistractionPlayKey] = useState(0);
   const [focusPlayKey, setFocusPlayKey] = useState(0);
   const [topTaskText, setTopTaskText] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { time: "00:00:00", text: "系统启动 - 1950s 显像模式已激活", type: "normal" },
-  ]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
   // Officer 选择弹窗状态
   const [showOfficerModal, setShowOfficerModal] = useState(false);
@@ -190,6 +195,11 @@ export function MonitorScreen() {
     if (preferred) setCurrentOfficerId(preferred);
   }, []);
 
+  useEffect(() => {
+    setMockEventText(t("monitor.status.allNormal"));
+    setLogs([{ time: getNowStr(dateLocale), text: t("monitor.log.boot"), type: "normal" }]);
+  }, [t, locale, dateLocale]);
+
   const pendingScheduledTasks: ScheduledTaskLike[] = tasks
     .filter((task) => !task.checked && task.scheduledStartAt && task.scheduledEndAt)
     .map(toScheduledTaskLike);
@@ -213,9 +223,12 @@ export function MonitorScreen() {
     setTopTaskText(top?.text ?? "");
   }, []);
 
-  const addLog = useCallback((text: string, type: LogEntry["type"] = "normal") => {
-    setLogs((prev) => [{ time: getNowStr(), text, type }, ...prev.slice(0, 20)]);
-  }, []);
+  const addLog = useCallback(
+    (text: string, type: LogEntry["type"] = "normal") => {
+      setLogs((prev) => [{ time: getNowStr(dateLocale), text, type }, ...prev.slice(0, 20)]);
+    },
+    [dateLocale]
+  );
 
   const beginFocusBlock = useCallback(
     (blocks: SupervisionFocusBlock[], blockIndex: number, taskText: string) => {
@@ -246,7 +259,11 @@ export function MonitorScreen() {
         currentBlockIndex: blockIndex,
       });
       addLog(
-        `🎯 ${formatBlockLabel(blockIndex, blocks.length)}：${taskText}（本段 ${Math.ceil(seconds / 60)} 分钟）`,
+        t("monitor.log.blockStart", {
+          label: formatBlockLabelLocalized(blockIndex, blocks.length, t),
+          task: taskText,
+          minutes: Math.ceil(seconds / 60),
+        }),
         "normal"
       );
       setBlockEnrollmentReady(false);
@@ -254,7 +271,9 @@ export function MonitorScreen() {
       enrollmentGateHandledRef.current = false;
       enrollmentGateDeadlineRef.current = Date.now() + ENROLLMENT_TIMEOUT_MS;
       addLog(
-        `请在 ${formatEnrollmentTimeoutLabel()}内开启摄像头并完成人脸采集，否则本段失败`,
+        t("monitor.log.enrollPrompt", {
+          timeout: formatEnrollmentTimeoutLabelLocalized(t),
+        }),
         "warning"
       );
 
@@ -264,7 +283,7 @@ export function MonitorScreen() {
         }
       });
     },
-    [addLog]
+    [addLog, t]
   );
 
   const launchSupervisionWithOfficer = useCallback(
@@ -287,7 +306,7 @@ export function MonitorScreen() {
           });
 
       if (blocks.length === 0) {
-        addLog("无法拆分专注时段，请先在日历中为任务排期", "warning");
+        addLog(t("monitor.log.noBlocks"), "warning");
         return;
       }
 
@@ -308,11 +327,8 @@ export function MonitorScreen() {
         currentBlockIndex: startIndex,
         completedBlockIndexes: run?.completedBlockIndexes ?? [],
       });
-      addLog(`👮 监督官：${officer.name}`, "success");
-      addLog(
-        `任务共 ${blocks.length} 个专注 block，全部完成才算任务成功`,
-        "normal"
-      );
+      addLog(t("monitor.log.officerAssigned", { name: officer.name }), "success");
+      addLog(t("monitor.log.blocksInfo", { count: blocks.length }), "normal");
       playChime();
       beginFocusBlock(blocks, startIndex, task.text);
 
@@ -326,21 +342,18 @@ export function MonitorScreen() {
         });
         try {
           await crtRef.current?.startCamera();
-          addLog(
-            "📹 摄像头已启动：请调整角度，确保画面包含脸部、双手与桌面",
-            "success"
-          );
+          addLog(t("monitor.log.cameraStarted"), "success");
         } catch {
           if (attempt < 2) {
             window.setTimeout(() => void startCameraWithRetry(attempt + 1), 400);
             return;
           }
-          addLog("请手动点击「开启实景摄像头」以开始监督", "warning");
+          addLog(t("monitor.log.cameraManual"), "warning");
         }
       };
       void startCameraWithRetry();
     },
-    [addLog, beginFocusBlock, tasks]
+    [addLog, beginFocusBlock, tasks, t]
   );
 
   const openSupervisionForTask = useCallback(
@@ -381,7 +394,7 @@ export function MonitorScreen() {
     setBlockEnrollmentReady(false);
     setDistractionPlayKey(0);
     setIsDistracted(false);
-    setMockEventText("一切正常");
+    setMockEventText(t("monitor.status.allNormal"));
     distractionCountedRef.current = false;
     cameraClosedByUserRef.current = false;
     completingBlockRef.current = false;
@@ -393,7 +406,7 @@ export function MonitorScreen() {
     taskDistractionsRef.current = [];
     enrollmentGateDeadlineRef.current = null;
     enrollmentGateHandledRef.current = false;
-  }, []);
+  }, [t]);
 
   const recordDistractionStrike = useCallback(
     (reason: string, blockIndex: number) => {
@@ -483,8 +496,8 @@ export function MonitorScreen() {
         const officerId = run.officerId ?? currentOfficerId;
         const blockLabel =
           totalFocusBlocks > 0
-            ? formatBlockLabel(currentBlockIndex, totalFocusBlocks)
-            : "当前 block";
+            ? formatBlockLabelLocalized(currentBlockIndex, totalFocusBlocks, t)
+            : t("monitor.stats.block");
         const record = await recordTaskExecutionFailure({
           taskId: run.taskId,
           officerId,
@@ -496,8 +509,8 @@ export function MonitorScreen() {
         playBeep();
         addLog(
           record.ok
-            ? `任务执行失败：${run.taskText}（${blockLabel} · ${reason}）`
-            : `任务执行失败记录未保存：${run.taskText}`,
+            ? t("monitor.log.taskFail", { task: run.taskText, block: blockLabel, reason })
+            : t("monitor.log.taskFailUnsaved", { task: run.taskText }),
           record.ok ? "warning" : "normal"
         );
 
@@ -528,6 +541,7 @@ export function MonitorScreen() {
       currentOfficerId,
       stopSupervisionMedia,
       totalFocusBlocks,
+      t,
     ]
   );
 
@@ -537,8 +551,8 @@ export function MonitorScreen() {
     if (breakPhaseRef.current) return;
     cameraClosedByUserRef.current = true;
     setIsDistracted(false);
-    failCurrentBlock("手动关闭摄像头，监督中断");
-  }, [failCurrentBlock]);
+    failCurrentBlock(t("monitor.log.cameraClosed"));
+  }, [failCurrentBlock, t]);
 
   const handleEnrollmentReady = useCallback(() => {
     const run = readSupervisionRun();
@@ -559,10 +573,13 @@ export function MonitorScreen() {
     setBlockEnrollmentReady(true);
     setTimerRunning(true);
     addLog(
-      `人脸采集完成，${formatBlockLabel(blockIndex, blocks.length)} 专注计时开始（${Math.ceil(seconds / 60)} 分钟）`,
+      t("monitor.log.enrollDone", {
+        label: formatBlockLabelLocalized(blockIndex, blocks.length, t),
+        minutes: Math.ceil(seconds / 60),
+      }),
       "success"
     );
-  }, [addLog, currentBlockIndex, focusBlocks]);
+  }, [addLog, currentBlockIndex, focusBlocks, t]);
 
   const handleEnrollmentTimeout = useCallback(() => {
     if (enrollmentGateHandledRef.current) return;
@@ -574,9 +591,11 @@ export function MonitorScreen() {
     setBlockEnrollmentReady(false);
     setTimerRunning(false);
     void failCurrentBlock(
-      `人脸采集超时（${formatEnrollmentTimeoutLabel()}内未完成，本段专注失败）`
+      t("monitor.log.enrollTimeout", {
+        timeout: formatEnrollmentTimeoutLabelLocalized(t),
+      })
     );
-  }, [failCurrentBlock]);
+  }, [failCurrentBlock, t]);
 
   const handleEnrollmentTimeoutRef = useRef(handleEnrollmentTimeout);
   handleEnrollmentTimeoutRef.current = handleEnrollmentTimeout;
@@ -608,9 +627,13 @@ export function MonitorScreen() {
       enrollmentGateDeadlineRef.current = null;
       setBlockEnrollmentReady(false);
       setTimerRunning(false);
-      void failCurrentBlock(`人脸采集失败：${reason}`);
+      void failCurrentBlock(
+        t("monitor.log.enrollFailed", {
+          reason: translateDistractionOrHint(reason, t),
+        })
+      );
     },
-    [failCurrentBlock]
+    [failCurrentBlock, t]
   );
 
   const handleSupervisionModalClose = useCallback(() => {
@@ -702,7 +725,7 @@ export function MonitorScreen() {
     clearStashedExecuteTask();
 
     openSupervisionForTask(task);
-    addLog(`进入任务执行：${task.text}`, "normal");
+    addLog(t("monitor.log.enterTask", { task: task.text }), "normal");
   }, [
     addLog,
     authLoading,
@@ -710,6 +733,7 @@ export function MonitorScreen() {
     reminderNow,
     tasks,
     user,
+    t,
   ]);
 
   const completeTaskSuccess = useCallback(async () => {
@@ -726,7 +750,7 @@ export function MonitorScreen() {
 
     if (!user) {
       stopSupervisionMedia();
-      addLog("当前为游客模式，任务完成未保存到账号", "normal");
+      addLog(t("monitor.log.guestMode"), "normal");
       setOutcomeModal({
         kind: "task-success",
         recordSaved: false,
@@ -749,8 +773,8 @@ export function MonitorScreen() {
     stopSupervisionMedia();
     addLog(
       record.ok
-        ? `任务执行成功：${run.taskText}`
-        : "任务完成记录保存失败，请稍后重试",
+        ? t("monitor.log.taskSuccess", { task: run.taskText })
+        : t("monitor.log.taskSaveFail"),
       record.ok ? "success" : "warning"
     );
     playChime();
@@ -771,6 +795,7 @@ export function MonitorScreen() {
     focusBlocks,
     stopSupervisionMedia,
     user,
+    t,
   ]);
 
   const completeCurrentBlock = useCallback(async () => {
@@ -806,9 +831,15 @@ export function MonitorScreen() {
 
     const completed = [...(run.completedBlockIndexes ?? []), currentBlockIndex];
     const nextIndex = currentBlockIndex + 1;
-    const blockLabel = formatBlockLabel(currentBlockIndex, blocks.length);
+    const blockLabel = formatBlockLabelLocalized(currentBlockIndex, blocks.length, t);
 
-    addLog(`${blockLabel} 完成（剩余 ${SUPERVISION_MAX_STRIKES - distractionCount} 颗星）`, "success");
+    addLog(
+      t("monitor.log.blockDone", {
+        label: blockLabel,
+        stars: SUPERVISION_MAX_STRIKES - distractionCount,
+      }),
+      "success"
+    );
     playChime();
 
     if (nextIndex >= blocks.length) {
@@ -841,8 +872,8 @@ export function MonitorScreen() {
         scope: "through-current-block",
       }),
       breakSecondsUntilNext,
-      nextBlockLabel: formatBlockLabel(nextIndex, blocks.length),
-      nextBlockStartLabel: formatBlockStartTime(nextBlock.startAt),
+      nextBlockLabel: formatBlockLabelLocalized(nextIndex, blocks.length, t),
+      nextBlockStartLabel: formatBlockStartTimeLocalized(nextBlock.startAt, dateLocale),
     });
     completingBlockRef.current = false;
   }, [
@@ -850,9 +881,12 @@ export function MonitorScreen() {
     addLog,
     buildCurrentOutcomeStats,
     completeTaskSuccess,
-      currentBlockIndex,
-      currentOfficerId,
-      focusBlocks,
+    currentBlockIndex,
+    currentOfficerId,
+    dateLocale,
+    distractionCount,
+    focusBlocks,
+    t,
   ]);
 
   const tryEvaluateBlockOutcome = useCallback(() => {
@@ -916,7 +950,7 @@ export function MonitorScreen() {
     (event: DistractionEvent) => {
       setIsDistracted(true);
       setDistractionPlayKey((k) => k + 1);
-      setMockEventText(event.reason);
+      setMockEventText(translateDistractionOrHint(event.reason, t));
 
       if (currentOfficerId === "yuri") {
         const prev = distractionCountRef.current;
@@ -927,7 +961,11 @@ export function MonitorScreen() {
         setDistractionCount(next);
         playBeep();
         addLog(
-          `任务第 ${currentBlockIndex + 1} 段 · 第 ${next} 次摸鱼：${event.reason}`,
+          t("monitor.log.slackingStrike", {
+            block: currentBlockIndex + 1,
+            strike: next,
+            reason: translateDistractionOrHint(event.reason, t),
+          }),
           "warning"
         );
         return;
@@ -945,24 +983,32 @@ export function MonitorScreen() {
 
       if (event.level === 1) {
         playChime();
-        addLog(`轻微走神：${event.reason}`, "normal");
+        addLog(
+          t("monitor.log.minorDrift", {
+            reason: translateDistractionOrHint(event.reason, t),
+          }),
+          "normal"
+        );
       } else {
         playBeep();
         const levelLabel =
           event.level === 4
-            ? "身份异常"
+            ? t("monitor.log.levelIdentity")
             : event.level === 3
-              ? "严重离座"
-              : "摸鱼抓包";
-        addLog(`${levelLabel} · ${activeOfficer.name} 监督视频已触发`, "warning");
+              ? t("monitor.log.levelLeave")
+              : t("monitor.log.levelSlacking");
+        addLog(
+          t("monitor.log.alertVideo", { level: levelLabel, name: activeOfficer.name }),
+          "warning"
+        );
       }
     },
-    [activeOfficer.name, addLog, currentBlockIndex, currentOfficerId, recordDistractionStrike]
+    [activeOfficer.name, addLog, currentBlockIndex, currentOfficerId, recordDistractionStrike, t]
   );
 
   const handleYuriThirdStrikeComplete = useCallback(() => {
-    failCurrentBlock("摸鱼：三颗星已全部扣完");
-  }, [failCurrentBlock]);
+    failCurrentBlock(t("monitor.log.strikesExhausted"));
+  }, [failCurrentBlock, t]);
 
   const handleLaunch = async (officerId: string) => {
     if (!selectedTask) return;
@@ -986,9 +1032,9 @@ export function MonitorScreen() {
         setDistractionLevel(1);
         distractionCountedRef.current = false;
         setFocusPlayKey((k) => k + 1);
-        setMockEventText("已恢复劳动，继续专注");
+        setMockEventText(t("monitor.status.laborRestored"));
         playChime();
-        addLog("恢复劳动，监督官切回正常督促", "success");
+        addLog(t("monitor.log.laborRestored"), "success");
       }}
       onCameraClosedByUser={handleCameraClosedByUser}
       onEnrollmentTimeout={handleEnrollmentTimeout}
@@ -998,7 +1044,7 @@ export function MonitorScreen() {
       onYuriThirdStrikeComplete={handleYuriThirdStrikeComplete}
       onYuriIdleRecoveryStart={() => {
         setIsDistracted(false);
-        setMockEventText("请保持脸部、双手与桌面在画面中");
+        setMockEventText(t("monitor.status.keepFraming"));
       }}
       behaviorDetectionPaused={breakPhase != null}
       fillViewport
@@ -1009,7 +1055,7 @@ export function MonitorScreen() {
               remainingSeconds: timer,
               blockLabel:
                 totalFocusBlocks > 0
-                  ? formatBlockLabel(currentBlockIndex, totalFocusBlocks)
+                  ? formatBlockLabelLocalized(currentBlockIndex, totalFocusBlocks, t)
                   : undefined,
             }
           : undefined
@@ -1037,9 +1083,14 @@ export function MonitorScreen() {
     setOutcomeModal(null);
     setBreakPhase(null);
     breakPhaseRef.current = false;
-    addLog(`进入 ${formatBlockLabel(pending.nextIndex, pending.blocks.length)}…`, "normal");
+    addLog(
+      t("monitor.log.nextBlock", {
+        label: formatBlockLabelLocalized(pending.nextIndex, pending.blocks.length, t),
+      }),
+      "normal"
+    );
     beginFocusBlock(pending.blocks, pending.nextIndex, pending.taskText);
-  }, [addLog, beginFocusBlock]);
+  }, [addLog, beginFocusBlock, t]);
 
   const beginBreakPhaseFromPending = useCallback(
     (options?: { dismissOutcomeModal?: boolean }) => {
@@ -1066,15 +1117,18 @@ export function MonitorScreen() {
         nextIndex: pending.nextIndex,
         taskText: pending.taskText,
         secondsRemaining,
-        nextBlockLabel: formatBlockLabel(pending.nextIndex, pending.blocks.length),
-        nextBlockStartLabel: formatBlockStartTime(nextBlock.startAt),
+        nextBlockLabel: formatBlockLabelLocalized(pending.nextIndex, pending.blocks.length, t),
+        nextBlockStartLabel: formatBlockStartTimeLocalized(nextBlock.startAt, dateLocale),
       });
       addLog(
-        `段间休息 ${secondsRemaining >= 60 ? `${Math.ceil(secondsRemaining / 60)} 分钟` : `${secondsRemaining} 秒`}，${formatBlockLabel(pending.nextIndex, pending.blocks.length)} 将自动开始`,
+        t("monitor.log.breakUntil", {
+          duration: formatBreakDurationHintLocalized(secondsRemaining, t),
+          label: formatBlockLabelLocalized(pending.nextIndex, pending.blocks.length, t),
+        }),
         "normal"
       );
     },
-    [addLog, startNextFocusBlock]
+    [addLog, dateLocale, startNextFocusBlock, t]
   );
 
   const handleStartBreak = useCallback(() => {

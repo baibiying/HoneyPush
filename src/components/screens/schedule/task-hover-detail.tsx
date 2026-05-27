@@ -5,7 +5,9 @@ import { createPortal } from "react-dom";
 import { Calendar, Clock, LayoutGrid } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
 import { planPomodoroSegments } from "@/lib/ai/schedule-times";
-import { getQuadrantMeta, normalizeQuadrantKey } from "./quadrants";
+import { normalizeQuadrantKey } from "./quadrants";
+import { useI18n } from "@/i18n/i18n-provider";
+import { useLocalizedQuadrant } from "@/hooks/use-localized-quadrant";
 
 const TOOLTIP_MAX_WIDTH_PX = 256;
 const TOOLTIP_ESTIMATE_HEIGHT_PX = 260;
@@ -48,13 +50,17 @@ export function getTaskTooltipPosition(rect: DOMRect): TaskTooltipPosition {
   return { x, y, placement };
 }
 
-export function formatDateTimeParts(iso: string | null) {
+export function formatDateTimeParts(iso: string | null, dateLocale: string) {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   return {
-    date: date.toLocaleDateString("zh-CN", { month: "long", day: "numeric" }),
-    time: date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }),
+    date: date.toLocaleDateString(dateLocale, { month: "long", day: "numeric" }),
+    time: date.toLocaleTimeString(dateLocale, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }),
   };
 }
 
@@ -73,13 +79,18 @@ export function TaskHoverDetailCard({
   segmentEndAt,
   className = "",
 }: TaskHoverDetailCardProps) {
-  const deadline = formatDateTimeParts(task.deadline);
-  const segmentStart = formatDateTimeParts(segmentStartAt ?? null);
-  const segmentEnd = formatDateTimeParts(segmentEndAt ?? null);
-  const meta = getQuadrantMeta(normalizeQuadrantKey(task.category));
+  const { t, locale } = useI18n();
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const quadrantKey = normalizeQuadrantKey(task.category);
+  const meta = useLocalizedQuadrant(quadrantKey);
+
+  const deadline = formatDateTimeParts(task.deadline, dateLocale);
+  const segmentStart = formatDateTimeParts(segmentStartAt ?? null, dateLocale);
+  const segmentEnd = formatDateTimeParts(segmentEndAt ?? null, dateLocale);
   const focusSegments = planPomodoroSegments(task.durationMinutes).filter(
     (segment) => segment.kind === "focus"
   ).length;
+
   return (
     <div
       className={[
@@ -91,13 +102,15 @@ export function TaskHoverDetailCard({
         <p className="text-xs font-bold text-neutral-800 leading-snug line-clamp-3">{task.text}</p>
         {task.scheduledStartAt && task.scheduledEndAt ? (
           <p className="mt-1.5 text-[10px] font-medium text-neutral-500 leading-snug">
-            番茄钟 {focusSegments} 段专注（25 分钟/段，段间休息 5 分钟）
+            {t("tasks.hover.scheduledNote", { segments: focusSegments })}
           </p>
         ) : null}
       </div>
       {segmentStart && segmentEnd ? (
         <div className="px-3 py-2.5 border-b border-neutral-100 bg-amber-50/80">
-          <p className="text-[10px] font-medium text-amber-800/80 leading-none">本段排期</p>
+          <p className="text-[10px] font-medium text-amber-800/80 leading-none">
+            {t("tasks.hover.segmentBlock")}
+          </p>
           <p className="mt-1.5 text-sm font-bold text-neutral-900 tabular-nums leading-tight">
             {segmentStart.time}
             <span className="mx-1.5 text-neutral-400 font-semibold">→</span>
@@ -112,10 +125,14 @@ export function TaskHoverDetailCard({
             <Clock className="h-3.5 w-3.5" />
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-neutral-400 leading-none">预计用时</p>
+            <p className="text-[10px] font-medium text-neutral-400 leading-none">
+              {t("tasks.hover.duration")}
+            </p>
             <p className="mt-1 text-sm font-semibold text-neutral-800 tabular-nums">
               {task.durationMinutes}
-              <span className="text-xs font-medium text-neutral-500 ml-0.5">分钟</span>
+              <span className="text-xs font-medium text-neutral-500 ml-0.5">
+                {t("tasks.hover.minutesUnit")}
+              </span>
             </p>
           </div>
         </div>
@@ -124,14 +141,18 @@ export function TaskHoverDetailCard({
             <Calendar className="h-3.5 w-3.5" />
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-neutral-400 leading-none">截止时间</p>
+            <p className="text-[10px] font-medium text-neutral-400 leading-none">
+              {t("tasks.hover.deadline")}
+            </p>
             {deadline ? (
               <>
-                <p className="mt-1 text-xs font-semibold text-neutral-800 leading-tight">{deadline.date}</p>
+                <p className="mt-1 text-xs font-semibold text-neutral-800 leading-tight">
+                  {deadline.date}
+                </p>
                 <p className="text-xs font-medium text-neutral-500 tabular-nums">{deadline.time}</p>
               </>
             ) : (
-              <p className="mt-1 text-xs font-medium text-neutral-400">未设置</p>
+              <p className="mt-1 text-xs font-medium text-neutral-400">{t("tasks.hover.notSet")}</p>
             )}
           </div>
         </div>
@@ -141,12 +162,16 @@ export function TaskHoverDetailCard({
           <LayoutGrid className="h-3.5 w-3.5" />
         </span>
         <div className="min-w-0">
-          <p className="text-[10px] font-medium text-neutral-400 leading-none">所在象限</p>
+          <p className="text-[10px] font-medium text-neutral-400 leading-none">
+            {t("tasks.hover.quadrant")}
+          </p>
           <p className="mt-0.5 text-xs font-semibold text-neutral-800 leading-snug">
             <span className="font-black text-[#1C1917]">{meta.shortTag}</span>
             <span className="mx-1 text-neutral-400">·</span>
             {meta.title}
-            <span className="text-neutral-500 font-medium">（{meta.subtitle}）</span>
+            <span className="text-neutral-500 font-medium">
+              {locale === "zh" ? `（${meta.subtitle}）` : ` (${meta.subtitle})`}
+            </span>
           </p>
         </div>
       </div>

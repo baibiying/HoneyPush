@@ -2,7 +2,9 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import type { QuestStep } from "./schedule-game-hub";
-import { STATIONS, type StationConfig } from "./schedule-stations";
+import type { StationConfig } from "./schedule-stations";
+import { useLocalizedStations } from "@/hooks/use-localized-stations";
+import { useI18n } from "@/i18n/i18n-provider";
 
 /** 可滚动地图画布最小高度 */
 const MAP_SCROLL_MIN_HEIGHT_PX = 1080;
@@ -860,12 +862,14 @@ export function ScheduleAdventureMap({
   onOpenAddTask,
   onRequireLogin,
 }: ScheduleAdventureMapProps) {
+  const { t } = useI18n();
+  const stations = useLocalizedStations();
   const stepDone = (index: number) => questSteps[index]?.done ?? false;
 
   const activateStation = (station: StationConfig) => {
     if (station.action === "create") {
       if (!canEdit) {
-        onRequireLogin("登录后才能创建任务。");
+        onRequireLogin(t("prompts.createTask"));
         return;
       }
       onOpenAddTask();
@@ -883,7 +887,7 @@ export function ScheduleAdventureMap({
       <MapTreasureFrame />
       <AdventureTrails />
 
-      {STATIONS.map((station, index) => (
+      {stations.map((station, index) => (
         <IslandNode
           key={`${station.title}-${index}`}
           station={station}

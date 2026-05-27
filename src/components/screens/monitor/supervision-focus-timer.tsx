@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCountdownSeconds } from "@/lib/supervision-blocks";
+import { useI18n } from "@/i18n/i18n-provider";
 
 type SupervisionFocusTimerProps = {
   totalSeconds: number;
@@ -13,10 +14,12 @@ export function SupervisionFocusTimer({
   remainingSeconds,
   blockLabel,
 }: SupervisionFocusTimerProps) {
+  const { t } = useI18n();
   const total = Math.max(1, totalSeconds);
   const remaining = Math.max(0, Math.min(total, remainingSeconds));
   const elapsed = total - remaining;
   const progress = Math.min(100, Math.max(0, (elapsed / total) * 100));
+  const remainingLabel = formatCountdownSeconds(remaining);
 
   return (
     <div
@@ -27,7 +30,7 @@ export function SupervisionFocusTimer({
       ].join(" ")}
       role="timer"
       aria-live="polite"
-      aria-label={`本段专注剩余 ${formatCountdownSeconds(remaining)}`}
+      aria-label={t("monitor.focusTimer.ariaRemaining", { time: remainingLabel })}
     >
       {blockLabel && (
         <p className="text-xs sm:text-sm font-bold uppercase tracking-wider text-emerald-300/95 truncate">
@@ -37,15 +40,15 @@ export function SupervisionFocusTimer({
       <div className="mt-1 flex items-end justify-between gap-3 sm:gap-4">
         <div>
           <p className="text-[10px] sm:text-xs font-mono text-stone-400 uppercase tracking-wide">
-            剩余
+            {t("monitor.focusTimer.remaining")}
           </p>
           <p className="font-bangers text-4xl sm:text-5xl md:text-6xl leading-none tabular-nums text-emerald-300 tracking-wide drop-shadow-[0_2px_0_#1c1917]">
-            {formatCountdownSeconds(remaining)}
+            {remainingLabel}
           </p>
         </div>
         <div className="text-right shrink-0 pb-0.5">
           <p className="text-[10px] sm:text-xs font-mono text-stone-400 uppercase tracking-wide">
-            已专注
+            {t("monitor.focusTimer.elapsed")}
           </p>
           <p className="font-mono text-lg sm:text-xl md:text-2xl font-bold tabular-nums text-stone-100">
             {formatCountdownSeconds(elapsed)}
@@ -59,7 +62,7 @@ export function SupervisionFocusTimer({
         />
       </div>
       <p className="mt-2 text-[10px] sm:text-xs font-mono text-stone-500 tabular-nums text-center">
-        本段 {formatCountdownSeconds(total)}
+        {t("monitor.focusTimer.blockTotal", { time: formatCountdownSeconds(total) })}
       </p>
     </div>
   );

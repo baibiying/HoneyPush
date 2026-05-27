@@ -6,6 +6,7 @@ import { Check, Shield, Sparkles } from "lucide-react";
 import { OFFICERS, type Officer, type OfficerId } from "@/lib/officers-data";
 import { setPreferredOfficer } from "@/lib/preferred-officer";
 import { OfficerAvatar } from "@/components/screens/monitor/officer-avatar";
+import { useI18n } from "@/i18n/i18n-provider";
 import { OfficerVideoPreview } from "./officer-video-preview";
 
 type ScheduleOfficerPanelProps = {
@@ -28,6 +29,8 @@ function OfficerCharacterCard({
   disabled: boolean;
   onPick: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <motion.div
       role="button"
@@ -48,7 +51,7 @@ function OfficerCharacterCard({
       ].join(" ")}
       aria-pressed={isSelected}
       aria-disabled={disabled}
-      aria-label={`选择监督官 ${officer.name}`}
+      aria-label={t("officer.selectAria", { name: officer.name })}
     >
       <div
         className={[
@@ -67,18 +70,18 @@ function OfficerCharacterCard({
         <div className="absolute top-4 left-3 z-10 flex items-center gap-1.5 rounded-md border-2 border-[#1c1917] bg-black/85 px-2 py-1">
           <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-300" strokeWidth={2.5} aria-hidden />
           <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-100">
-            AI 监督官
+            {t("officer.badge")}
           </span>
         </div>
 
         {isSelected ? (
           <div className="absolute top-4 right-3 z-10 flex items-center gap-1.5 rounded-md border-2 border-[#1c1917] bg-amber-400 px-2.5 py-1 shadow-[0_2px_0_#1c1917]">
             <Check className="h-4 w-4 text-[#1c1917]" strokeWidth={3} aria-hidden />
-            <span className="text-xs sm:text-sm font-black text-[#1c1917]">已编入</span>
+            <span className="text-xs sm:text-sm font-black text-[#1c1917]">{t("officer.enlisted")}</span>
           </div>
         ) : (
           <div className="absolute top-4 right-3 z-10 rounded-md border-2 border-dashed border-[#1c1917]/50 bg-white/70 px-2.5 py-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <span className="text-xs sm:text-sm font-bold text-neutral-600">点击招募</span>
+            <span className="text-xs sm:text-sm font-bold text-neutral-600">{t("officer.recruit")}</span>
           </div>
         )}
 
@@ -143,7 +146,7 @@ function OfficerCharacterCard({
                 : "bg-[#1c1917] text-amber-100 group-hover:bg-neutral-800",
             ].join(" ")}
           >
-            {isSelected ? "当前监督官" : "选为监督官"}
+            {isSelected ? t("officer.current") : t("officer.choose")}
           </div>
         </div>
       </div>
@@ -157,11 +160,12 @@ export function ScheduleOfficerPanel({
   onSelected,
   onRequireLogin,
 }: ScheduleOfficerPanelProps) {
+  const { t } = useI18n();
   const [savedFlash, setSavedFlash] = useState(false);
 
   const handlePick = (id: OfficerId) => {
     if (!canEdit) {
-      onRequireLogin("登录后才能保存监督官选择。");
+      onRequireLogin(t("prompts.saveOfficer"));
       return;
     }
     setPreferredOfficer(id);
@@ -175,15 +179,23 @@ export function ScheduleOfficerPanel({
       <div className="rounded-xl border-2 border-amber-400/40 bg-amber-500/15 px-4 py-3 sm:px-5 sm:py-3.5 flex gap-3">
         <Shield className="h-6 w-6 sm:h-7 sm:w-7 shrink-0 text-amber-200 mt-0.5" strokeWidth={2.5} aria-hidden />
         <p className="text-sm sm:text-base font-bold text-amber-50 leading-relaxed">
-          招募你的专属监督官。任务到点后将<strong className="text-white">直接进入监督</strong>
-          ，自动开启摄像头，无需再次选择。
+          {t("officer.intro").split(t("officer.introStrong")).map((part, index, parts) =>
+            index < parts.length - 1 ? (
+              <span key={index}>
+                {part}
+                <strong className="text-white">{t("officer.introStrong")}</strong>
+              </span>
+            ) : (
+              <span key={index}>{part}</span>
+            ),
+          )}
         </p>
       </div>
 
       {savedFlash && (
         <p className="flex items-center gap-2 rounded-lg border-2 border-emerald-400/50 bg-emerald-500/20 px-3 py-2.5 text-sm sm:text-base font-bold text-emerald-100">
           <Check className="h-4 w-4 shrink-0" aria-hidden />
-          已保存，到点将由此监督官执勤
+          {t("officer.saved")}
         </p>
       )}
 

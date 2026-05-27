@@ -2,6 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/i18n-provider";
 import { FROSTED_PANEL, ScheduleHubBackground } from "./task-form-shared";
 
 type ScheduleUnscheduledNoticeProps = {
@@ -17,6 +18,8 @@ export function ScheduleUnscheduledNotice({
   taskNames,
   onDismiss,
 }: ScheduleUnscheduledNoticeProps) {
+  const { t } = useI18n();
+
   if (!open || taskNames.length === 0) return null;
 
   return (
@@ -39,13 +42,13 @@ export function ScheduleUnscheduledNotice({
                 id="schedule-unscheduled-title"
                 className="font-bangers text-2xl sm:text-3xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917]"
               >
-                部分任务未能排入
+                {t("calendar.noticeTitle")}
               </h3>
               <p className="mt-3 text-base sm:text-lg font-black text-amber-50 leading-snug max-w-md">
-                已按番茄钟（专注 25 分钟 + 休息 5 分钟）在可用时段内排期 {scheduledCount} 条。
+                {t("calendar.noticeBody", { scheduled: scheduledCount })}
               </p>
               <p className="mt-2 text-sm sm:text-base font-bold text-amber-100/90 leading-snug max-w-md">
-                以下 {taskNames.length} 条在现有可用时段内排不下，请增加时段或缩短预计用时后重试：
+                {t("calendar.noticeList", { count: taskNames.length })}
               </p>
               <ul className="mt-4 w-full max-w-sm space-y-2 text-left px-2">
                 {taskNames.map((name, index) => (
@@ -66,7 +69,7 @@ export function ScheduleUnscheduledNotice({
                 onClick={onDismiss}
                 className="mt-6 w-full h-11 sm:h-12 rounded-xl border-2 border-[#1C1917] bg-white/95 px-6 text-base sm:text-lg font-bold text-[#1C1917] comic-shadow-sm hover:bg-amber-50 comic-btn-push"
               >
-                知道了，查看日历
+                {t("calendar.noticeOk")}
               </Button>
             </div>
           </div>

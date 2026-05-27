@@ -7,6 +7,9 @@ import {
   formatDateInput,
   type AvailabilitySlotInput,
 } from "@/lib/ai/availability";
+import { useI18n } from "@/i18n/i18n-provider";
+import { formatDayLabel } from "@/i18n/format-day-label";
+import type { TranslateParams } from "@/i18n/translate";
 
 export type AvailabilitySlotRow = AvailabilitySlotInput & { id: string };
 
@@ -131,6 +134,8 @@ function DayTimelineCard({
   onUpdateSlot,
   onRemoveSlot,
 }: DayTimelineCardProps) {
+  const { t, locale } = useI18n();
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<TimelineDrag | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -201,7 +206,7 @@ function DayTimelineCard({
   return (
     <div className={`${FROSTED_FIELD} p-3 sm:p-3.5`}>
       <p className="font-bangers text-base sm:text-lg text-white tracking-wide drop-shadow-[0_1px_0_#1C1917] mb-2.5">
-        {formatDayHeading(date)}
+        {formatDayHeading(date, dateLocale, t)}
       </p>
 
       <div
@@ -249,7 +254,7 @@ function DayTimelineCard({
             >
               <button
                 type="button"
-                aria-label="拖动调整开始时间"
+                aria-label={t("availability.dragStart")}
                 onPointerDown={(e) => startDrag(e, slot.id, "start")}
                 className="absolute left-0 top-0 bottom-0 w-2.5 sm:w-3 cursor-ew-resize rounded-l-md bg-[#1C1917]/25 hover:bg-[#1C1917]/45 z-20"
               />
@@ -274,15 +279,15 @@ function DayTimelineCard({
                     onSelectId(null);
                   }}
                   className="absolute left-1/2 top-0 z-30 flex h-6 w-6 sm:h-7 sm:w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border-2 border-[#1C1917] bg-white text-rose-600 shadow-[0_2px_0_#1C1917] hover:bg-rose-50 active:scale-95"
-                  aria-label="删除该时段"
-                  title="删除该时段"
+                  aria-label={t("availability.deleteSlot")}
+                  title={t("availability.deleteSlotTitle")}
                 >
                   <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.5} />
                 </button>
               )}
               <button
                 type="button"
-                aria-label="拖动调整结束时间"
+                aria-label={t("availability.dragEnd")}
                 onPointerDown={(e) => startDrag(e, slot.id, "end")}
                 className="absolute right-0 top-0 bottom-0 w-2.5 sm:w-3 cursor-ew-resize rounded-r-md bg-[#1C1917]/25 hover:bg-[#1C1917]/45 z-20"
               />
@@ -293,7 +298,7 @@ function DayTimelineCard({
 
       {slots.length === 0 && (
         <p className="mt-2 text-[10px] font-semibold text-amber-100/70 text-center">
-          点击时间轴空白处新增 1 小时时段 · 拖动色块左右边缘可拉长或缩短
+          {t("availability.timelineHint")}
         </p>
       )}
 
@@ -301,17 +306,20 @@ function DayTimelineCard({
   );
 }
 
-function formatDayHeading(dateStr: string) {
+function formatDayHeading(
+  dateStr: string,
+  dateLocale: string,
+  t: (path: string, params?: TranslateParams) => string,
+) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   if (Number.isNaN(date.getTime())) return dateStr;
-  const today = formatDateInput(new Date());
-  const label = date.toLocaleDateString("zh-CN", {
+  const label = date.toLocaleDateString(dateLocale, {
     month: "long",
     day: "numeric",
     weekday: "short",
   });
-  return today === dateStr ? `今天 · ${label}` : label;
+  return formatDayLabel(dateStr, label, t);
 }
 
 type AvailabilityEditorProps = {
@@ -359,6 +367,7 @@ function GameAvailabilityEditor({
   slots: AvailabilitySlotRow[];
   onChange: (slots: AvailabilitySlotRow[]) => void;
 }) {
+  const { t } = useI18n();
   const today = formatDateInput(new Date());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [extraDates, setExtraDates] = useState<string[]>([]);
@@ -430,7 +439,7 @@ function GameAvailabilityEditor({
 
       <div className={`${FROSTED_FIELD} p-3 flex flex-wrap items-end gap-2`}>
         <div className="flex-1 min-w-[10rem] space-y-1">
-          <label className="text-[10px] font-bold text-amber-100/90">添加新日期</label>
+          <label className="text-[10px] font-bold text-amber-100/90">{t("availability.addNewDate")}</label>
           <input
             type="date"
             min={today}
@@ -445,7 +454,7 @@ function GameAvailabilityEditor({
           disabled={!newDate || allDates.has(newDate)}
           className="shrink-0 rounded-xl border-2 border-[#1C1917] bg-white/95 px-4 py-2 text-sm font-bangers tracking-wide text-[#1C1917] comic-shadow-sm hover:bg-amber-50 disabled:opacity-45 disabled:cursor-not-allowed"
         >
-          添加这一天
+          {t("availability.addDay")}
         </button>
       </div>
     </div>
@@ -463,6 +472,8 @@ function ListAvailabilityEditor({
   showHeader: boolean;
   isGame: boolean;
 }) {
+  const { t } = useI18n();
+
   const updateSlot = (id: string, patch: Partial<AvailabilitySlotInput>) => {
     onChange(slots.map((slot) => (slot.id === id ? { ...slot, ...patch } : slot)));
   };
@@ -494,7 +505,7 @@ function ListAvailabilityEditor({
                 isGame ? "font-bangers text-white tracking-wide" : "text-neutral-800",
               ].join(" ")}
             >
-              可用时间段
+              {t("availability.sectionTitle")}
             </p>
             <p
               className={[
@@ -502,7 +513,7 @@ function ListAvailabilityEditor({
                 isGame ? "text-amber-100/85" : "text-neutral-600",
               ].join(" ")}
             >
-              手动填写日期与起止时间；今天排不下会自动排到后续时段。
+              {t("availability.sectionHint")}
             </p>
           </div>
         </div>
@@ -515,7 +526,7 @@ function ListAvailabilityEditor({
             isGame ? "font-semibold text-amber-100/80" : "text-neutral-500 font-comic",
           ].join(" ")}
         >
-          点击下方「添加时段」，手动输入今天或未来几天可做事的时间。
+          {t("availability.emptyHint")}
         </p>
       ) : (
         <ul className={["space-y-2 pr-1", isGame ? "" : "max-h-56 overflow-y-auto"].join(" ")}>
@@ -529,7 +540,7 @@ function ListAvailabilityEditor({
               }
             >
               <div className="flex-1 min-w-0 space-y-1">
-                <label className="text-[10px] font-bold text-neutral-600">日期</label>
+                <label className="text-[10px] font-bold text-neutral-600">{t("common.date")}</label>
                 <input
                   type="date"
                   value={slot.date}
@@ -542,7 +553,7 @@ function ListAvailabilityEditor({
                 />
               </div>
               <div className="w-full sm:w-32 space-y-1">
-                <label className="text-[10px] font-bold text-neutral-600">开始</label>
+                <label className="text-[10px] font-bold text-neutral-600">{t("common.start")}</label>
                 <input
                   type="time"
                   value={slot.startTime}
@@ -555,7 +566,7 @@ function ListAvailabilityEditor({
                 />
               </div>
               <div className="w-full sm:w-32 space-y-1">
-                <label className="text-[10px] font-bold text-neutral-600">结束</label>
+                <label className="text-[10px] font-bold text-neutral-600">{t("common.end")}</label>
                 <input
                   type="time"
                   value={slot.endTime}
@@ -571,7 +582,7 @@ function ListAvailabilityEditor({
                 type="button"
                 onClick={() => removeSlot(slot.id)}
                 className="p-1.5 border border-black bg-white hover:bg-rose-100 text-rose-700 shrink-0 self-end sm:mt-5"
-                title="删除时段"
+                title={t("availability.deleteSlotTitle")}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -586,7 +597,7 @@ function ListAvailabilityEditor({
         className="w-full text-xs font-bold py-2.5 border-2 border-black bg-white hover:bg-amber-100 flex items-center justify-center gap-1"
       >
         <Plus className="w-3.5 h-3.5" />
-        添加时段
+        {t("availability.addSlot")}
       </button>
     </div>
   );

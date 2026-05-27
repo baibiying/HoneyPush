@@ -4,20 +4,21 @@ import { Bell, Clock, Lightbulb, Swords, X } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useGlobalUpcomingTaskReminders } from "@/hooks/use-global-upcoming-task-reminders";
 import { useSupervisionTakeover } from "@/hooks/use-supervision-takeover";
+import { useI18n } from "@/i18n/i18n-provider";
 import {
   FROSTED_PANEL,
   ScheduleHubBackground,
 } from "@/components/screens/schedule/task-form-shared";
 import {
   TASK_REMINDER_LEAD_MINUTES,
-  formatMinutesUntilStart,
+  formatMinutesUntilStartLocalized,
   type ScheduledTaskLike,
 } from "@/lib/schedule-execution";
 
-function formatStartTime(iso: string) {
+function formatStartTime(iso: string, dateLocale: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString(dateLocale, {
     month: "numeric",
     day: "numeric",
     hour: "2-digit",
@@ -37,12 +38,13 @@ function UpcomingTaskToast({
   onSnooze: (task: ScheduledTaskLike) => void;
   onDismissPermanent: (task: ScheduledTaskLike) => void;
 }) {
-  const countdown = formatMinutesUntilStart(task, now);
-  const startLabel = task.scheduledStartAt ? formatStartTime(task.scheduledStartAt) : null;
+  const { t, locale } = useI18n();
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const countdown = formatMinutesUntilStartLocalized(task, t, now);
+  const startLabel = task.scheduledStartAt ? formatStartTime(task.scheduledStartAt, dateLocale) : null;
 
   return (
     <div className="pointer-events-auto relative">
-      {/* 外圈提醒光晕 */}
       <div
         className="absolute -inset-1 rounded-[1.1rem] bg-gradient-to-r from-amber-400/50 via-orange-400/40 to-amber-500/50 blur-sm animate-pulse"
         aria-hidden
@@ -55,23 +57,20 @@ function UpcomingTaskToast({
       >
         <ScheduleHubBackground />
 
-        {/* 左侧提醒色条 */}
         <div
           className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-300 via-orange-400 to-amber-500 z-10"
           aria-hidden
         />
 
         <div className={`relative ${FROSTED_PANEL} border-0 pl-1`}>
-          {/* 提醒顶带 */}
           <div className="flex items-center gap-2 border-b-2 border-amber-400/30 bg-gradient-to-r from-amber-500/35 via-orange-500/25 to-transparent px-4 py-2">
             <Bell className="h-4 w-4 shrink-0 text-amber-200 animate-pulse" strokeWidth={2.5} aria-hidden />
             <span className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-100">
-              任务提醒
+              {t("reminder.badge")}
             </span>
             <span className="ml-auto flex h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.9)] animate-ping" aria-hidden />
           </div>
 
-          {/* 标题栏 */}
           <header className="flex items-start gap-3 border-b-2 border-white/15 px-4 py-3">
             <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-gradient-to-br from-amber-400 to-orange-500 text-[#1C1917] shadow-[0_3px_0_#c2410c]">
               <Swords className="h-5 w-5" strokeWidth={2.5} aria-hidden />
@@ -81,25 +80,24 @@ function UpcomingTaskToast({
             </span>
             <div className="min-w-0 flex-1 pt-0.5">
               <p className="font-bangers text-lg tracking-wide text-white drop-shadow-[0_2px_0_#1C1917] leading-none">
-                任务即将开始
+                {t("reminder.title")}
               </p>
-              <p className="mt-1 text-xs font-bold text-amber-200/90">请提前做好准备</p>
+              <p className="mt-1 text-xs font-bold text-amber-200/90">{t("reminder.subtitle")}</p>
             </div>
             <button
               type="button"
               onClick={() => onSnooze(task)}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-[#1C1917] bg-white/95 text-[#1C1917] shadow-[0_2px_0_#1C1917] transition-all hover:bg-amber-100 active:translate-y-0.5 active:shadow-none"
-              aria-label="关闭，1 分钟后再次提醒"
+              aria-label={t("reminder.closeSnooze")}
             >
               <X className="h-4 w-4" strokeWidth={3} />
             </button>
           </header>
 
-          {/* 主体 */}
           <div className="space-y-3 px-4 py-3.5">
             <div className="rounded-lg border border-white/15 bg-black/20 px-2.5 py-1">
               <p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/80">
-                当前任务
+                {t("reminder.currentTask")}
               </p>
               <h2
                 id={`task-reminder-title-${task.id}`}
@@ -109,7 +107,6 @@ function UpcomingTaskToast({
               </h2>
             </div>
 
-            {/* 倒计时强调区 */}
             <div
               className="rounded-xl border-2 border-amber-400/80 bg-gradient-to-br from-amber-500/30 via-orange-500/20 to-amber-600/10 px-3 py-3 shadow-[inset_0_0_20px_rgba(251,191,36,0.12)] ring-1 ring-amber-300/30"
               role="status"
@@ -117,7 +114,7 @@ function UpcomingTaskToast({
               <div className="flex items-center gap-2 mb-1.5">
                 <Clock className="h-4 w-4 shrink-0 text-amber-200 animate-pulse" strokeWidth={2.5} aria-hidden />
                 <span className="text-[10px] font-black uppercase tracking-wider text-amber-100">
-                  倒计时
+                  {t("reminder.countdown")}
                 </span>
               </div>
               <p className="font-bangers text-2xl sm:text-[1.65rem] tracking-wide text-amber-50 drop-shadow-[0_2px_0_#1C1917] leading-tight">
@@ -126,12 +123,11 @@ function UpcomingTaskToast({
               {startLabel ? (
                 <p className="mt-1.5 text-xs font-bold text-amber-100/90 tabular-nums flex items-center gap-1.5">
                   <span className="inline-block h-1 w-1 rounded-full bg-amber-300" aria-hidden />
-                  计划开始：{startLabel}
+                  {t("reminder.scheduledStart", { time: startLabel })}
                 </p>
               ) : null}
             </div>
 
-            {/* 提示说明 */}
             <div className="flex gap-2.5 rounded-lg border border-dashed border-amber-400/40 bg-amber-500/10 px-3 py-2.5">
               <Lightbulb
                 className="h-5 w-5 shrink-0 text-amber-300 mt-0.5"
@@ -139,19 +135,18 @@ function UpcomingTaskToast({
                 aria-hidden
               />
               <p className="text-sm sm:text-base font-bold leading-relaxed text-amber-50">
-                提前 {TASK_REMINDER_LEAD_MINUTES} 分钟提醒你。到点将自动进入监督流程，请准备好进入专注状态。
+                {t("reminder.tip", { minutes: TASK_REMINDER_LEAD_MINUTES })}
               </p>
             </div>
           </div>
 
-          {/* 底部 */}
           <footer className="border-t-2 border-white/15 bg-black/15 px-4 py-3">
             <button
               type="button"
               onClick={() => onDismissPermanent(task)}
               className="w-full rounded-xl border-2 border-[#1C1917] bg-white/95 py-2.5 text-sm font-bold text-[#1C1917] comic-shadow-sm transition-all hover:bg-amber-50 active:translate-y-0.5 active:shadow-none"
             >
-              不再提醒此任务
+              {t("reminder.dismissPermanent")}
             </button>
           </footer>
         </div>

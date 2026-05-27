@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "./auth-provider";
 import { GameScrollWoodSeal } from "@/components/screens/performance/game-scroll-ui";
+import { useI18n } from "@/i18n/i18n-provider";
+import { BRAND_FULL, BRAND_MARK_ZH, BRAND_NAME } from "@/lib/brand";
 
 const STARFIELD = {
   backgroundImage: [
@@ -37,6 +39,7 @@ const INPUT_CLASS =
 type AuthTab = "login" | "register";
 
 export function AuthModal() {
+  const { t } = useI18n();
   const {
     modalOpen,
     modalTab,
@@ -86,7 +89,7 @@ export function AuthModal() {
       await login({ email: loginEmail, password: loginPassword });
       resetForms();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败，请重试");
+      setError(err instanceof Error ? err.message : t("auth.loginFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -95,7 +98,7 @@ export function AuthModal() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (registerPassword !== confirmPassword) {
-      setError("两次输入的密码不一致");
+      setError(t("auth.passwordMismatch"));
       return;
     }
     setSubmitting(true);
@@ -108,7 +111,7 @@ export function AuthModal() {
       });
       resetForms();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "注册失败，请重试");
+      setError(err instanceof Error ? err.message : t("auth.registerFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -140,7 +143,7 @@ export function AuthModal() {
             >
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
               <span className="font-comic text-[10px] font-bold tracking-widest text-amber-200/80">
-                HONEYPUSH · 云端存档
+                {t("auth.cloudSave")}
               </span>
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
             </div>
@@ -151,7 +154,7 @@ export function AuthModal() {
                 "rounded-lg border-2 border-[#1C1917] bg-rose-500 text-white",
                 "shadow-[0_3px_0_#1C1917] hover:bg-rose-400 active:translate-y-px",
               ].join(" ")}
-              aria-label="关闭"
+              aria-label={t("auth.close")}
             >
               <X className="h-4 w-4" />
             </DialogClose>
@@ -162,17 +165,17 @@ export function AuthModal() {
                   <Scroll className="h-7 w-7 sm:h-8 sm:w-8" />
                 </GameScrollWoodSeal>
               </div>
-              <DialogTitle className="sr-only">HoneyPush 督蜜 登录注册</DialogTitle>
+              <DialogTitle className="sr-only">{BRAND_FULL}</DialogTitle>
               <div className="flex items-baseline justify-center gap-2.5">
                 <span className="font-bangers text-4xl sm:text-5xl text-amber-200 drop-shadow-[0_3px_0_#1C1917]">
-                  HoneyPush
+                  {BRAND_NAME}
                 </span>
                 <span className="font-bangers text-4xl sm:text-5xl text-white drop-shadow-[0_3px_0_#1C1917]">
-                  督蜜
+                  {BRAND_MARK_ZH}
                 </span>
               </div>
               <DialogDescription className="mt-2 font-comic text-base sm:text-lg font-bold text-amber-100/90">
-                基地检查站 · 登入后同步任务与战绩
+                {t("auth.checkpoint")}
               </DialogDescription>
             </header>
 
@@ -198,21 +201,21 @@ export function AuthModal() {
                   <div
                     className="grid grid-cols-2 gap-2"
                     role="tablist"
-                    aria-label="登录或注册"
+                    aria-label={t("auth.tabsAria")}
                   >
                     <QuestTab
                       active={modalTab === "login"}
                       onClick={() => switchTab("login")}
                       icon={<LogIn className="h-5 w-5" />}
                     >
-                      归队登入
+                      {t("auth.tabLogin")}
                     </QuestTab>
                     <QuestTab
                       active={modalTab === "register"}
                       onClick={() => switchTab("register")}
                       icon={<UserPlus className="h-5 w-5" />}
                     >
-                      新兵注册
+                      {t("auth.tabRegister")}
                     </QuestTab>
                   </div>
                 </div>
@@ -220,10 +223,10 @@ export function AuthModal() {
                 <div className="comic-panel-halftone bg-[#FFF8E7] px-4 py-4 sm:px-5 sm:py-5 max-h-[min(72vh,34rem)] overflow-y-auto overscroll-contain">
                   {modalTab === "login" ? (
                     <form onSubmit={handleLogin} className="space-y-4">
-                      <GameField label="邮箱" icon={<Mail className="h-4 w-4" />}>
+                      <GameField label={t("auth.fieldEmail")} icon={<Mail className="h-4 w-4" />}>
                         <input
                           type="email"
-                          placeholder="your@email.com"
+                          placeholder={t("auth.placeholderEmail")}
                           value={loginEmail}
                           onChange={(e) => setLoginEmail(e.target.value)}
                           className={INPUT_CLASS}
@@ -231,10 +234,10 @@ export function AuthModal() {
                           required
                         />
                       </GameField>
-                      <GameField label="密码" icon={<KeyRound className="h-4 w-4" />}>
+                      <GameField label={t("auth.fieldPassword")} icon={<KeyRound className="h-4 w-4" />}>
                         <input
                           type="password"
-                          placeholder="输入密码"
+                          placeholder={t("auth.placeholderPassword")}
                           value={loginPassword}
                           onChange={(e) => setLoginPassword(e.target.value)}
                           className={INPUT_CLASS}
@@ -243,25 +246,25 @@ export function AuthModal() {
                         />
                       </GameField>
                       <GameSubmit disabled={submitting} variant="enter">
-                        {submitting ? "验证身份中…" : "进入督蜜局"}
+                        {submitting ? t("auth.submittingLogin") : t("auth.submitLogin")}
                       </GameSubmit>
                     </form>
                   ) : (
                     <form onSubmit={handleRegister} className="space-y-3.5">
-                      <GameField label="代号（可选）" icon={<User className="h-4 w-4" />}>
+                      <GameField label={t("auth.fieldNickname")} icon={<User className="h-4 w-4" />}>
                         <input
                           type="text"
-                          placeholder="你的昵称"
+                          placeholder={t("auth.placeholderNickname")}
                           value={registerName}
                           onChange={(e) => setRegisterName(e.target.value)}
                           className={INPUT_CLASS}
                           autoComplete="nickname"
                         />
                       </GameField>
-                      <GameField label="邮箱" icon={<Mail className="h-4 w-4" />}>
+                      <GameField label={t("auth.fieldEmail")} icon={<Mail className="h-4 w-4" />}>
                         <input
                           type="email"
-                          placeholder="your@email.com"
+                          placeholder={t("auth.placeholderEmail")}
                           value={registerEmail}
                           onChange={(e) => setRegisterEmail(e.target.value)}
                           className={INPUT_CLASS}
@@ -269,10 +272,10 @@ export function AuthModal() {
                           required
                         />
                       </GameField>
-                      <GameField label="密码" icon={<KeyRound className="h-4 w-4" />}>
+                      <GameField label={t("auth.fieldPassword")} icon={<KeyRound className="h-4 w-4" />}>
                         <input
                           type="password"
-                          placeholder="至少 8 位"
+                          placeholder={t("auth.placeholderPasswordMin")}
                           value={registerPassword}
                           onChange={(e) => setRegisterPassword(e.target.value)}
                           className={INPUT_CLASS}
@@ -281,10 +284,13 @@ export function AuthModal() {
                           minLength={8}
                         />
                       </GameField>
-                      <GameField label="确认密码" icon={<KeyRound className="h-4 w-4" />}>
+                      <GameField
+                        label={t("auth.fieldConfirmPassword")}
+                        icon={<KeyRound className="h-4 w-4" />}
+                      >
                         <input
                           type="password"
-                          placeholder="再输入一次"
+                          placeholder={t("auth.placeholderConfirmPassword")}
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           className={INPUT_CLASS}
@@ -293,7 +299,7 @@ export function AuthModal() {
                         />
                       </GameField>
                       <GameSubmit disabled={submitting} variant="pass">
-                        {submitting ? "建档中…" : "领取通行证"}
+                        {submitting ? t("auth.submittingRegister") : t("auth.submitRegister")}
                       </GameSubmit>
                     </form>
                   )}
@@ -303,7 +309,7 @@ export function AuthModal() {
 
             <footer className="relative z-10 border-t-2 border-[#1C1917]/50 bg-[#1C1917]/30 px-5 py-2.5 text-center sm:px-6">
               <p className="font-comic text-xs sm:text-sm font-bold text-amber-100/60">
-                登录即同意督蜜局任务监督条款
+                {t("auth.terms")}
               </p>
             </footer>
           </div>

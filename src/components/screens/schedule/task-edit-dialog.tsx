@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useCategoryOptions } from "@/hooks/use-category-options";
+import { useI18n } from "@/i18n/i18n-provider";
 import {
   FROSTED_FIELD,
   FROSTED_PANEL,
@@ -33,13 +35,6 @@ export type ScheduleTask = {
   scheduledEndAt: string | null;
   scheduledFocusSegments?: Array<{ startAt: string; endAt: string }> | null;
 };
-
-export const CATEGORY_OPTIONS = [
-  { value: "import-urgent", label: "A · 重要且紧急" },
-  { value: "import-noturgent", label: "B · 重要不紧急" },
-  { value: "notimport-urgent", label: "C · 紧急不重要" },
-  { value: "notimport-noturgent", label: "D · 不重要不紧急" },
-];
 
 function toDatetimeLocalValue(iso: string | null) {
   if (!iso) return "";
@@ -69,6 +64,8 @@ export function TaskEditDialog({
   onOpenChange,
   onSave,
 }: TaskEditDialogProps) {
+  const { t } = useI18n();
+  const categoryOptions = useCategoryOptions();
   const [text, setText] = useState("");
   const [category, setCategory] = useState("import-urgent");
   const [durationMinutes, setDurationMinutes] = useState(25);
@@ -107,7 +104,7 @@ export function TaskEditDialog({
             type="button"
             onClick={() => onOpenChange(false)}
             className="absolute top-1 right-1 sm:top-2 sm:right-2 z-20 flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-white/95 text-[#1C1917] comic-shadow-sm hover:bg-amber-50"
-            aria-label="关闭"
+            aria-label={t("common.close")}
           >
             <X className="h-5 w-5" />
           </button>
@@ -120,10 +117,10 @@ export function TaskEditDialog({
                 </span>
                 <div className="min-w-0 text-left">
                   <DialogTitle className="font-bangers text-xl sm:text-2xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917] text-left">
-                    编辑任务
+                    {t("tasks.editTitle")}
                   </DialogTitle>
                   <DialogDescription className="text-[10px] sm:text-xs font-semibold text-amber-100/85 mt-0.5 text-left">
-                    修改任务情报，保存后同步到「查看任务」
+                    {t("tasks.editSubtitle")}
                   </DialogDescription>
                 </div>
               </div>
@@ -132,18 +129,18 @@ export function TaskEditDialog({
             <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-1 min-h-0 flex-col gap-3">
               <div className={`flex-1 min-h-0 overflow-hidden p-1 sm:p-2 ${FROSTED_PANEL}`}>
                 <div className="h-full min-h-0 overflow-y-auto p-3 sm:p-4 space-y-4">
-                  <GameField label="任务名称" icon={Scroll}>
+                  <GameField label={t("tasks.fieldName")} icon={Scroll}>
                     <Input
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       className={`h-12 sm:h-14 text-base sm:text-lg ${GAME_INPUT}`}
-                      placeholder="例如：完成交互设计稿"
+                      placeholder={t("tasks.editNamePlaceholder")}
                       autoFocus
                     />
                   </GameField>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <GameField label="预计用时（分钟）" icon={Clock}>
+                    <GameField label={t("tasks.fieldDuration")} icon={Clock}>
                       <Input
                         type="number"
                         min={15}
@@ -151,13 +148,13 @@ export function TaskEditDialog({
                         step={5}
                         value={durationMinutes}
                         onChange={(e) => setDurationMinutes(Number(e.target.value) || 25)}
-                        title="这件事大概要做多久"
+                        title={t("tasks.durationTitle")}
                         placeholder="25"
                         className={`h-11 sm:h-12 tabular-nums ${GAME_INPUT}`}
                       />
                     </GameField>
 
-                    <GameField label="截止时间" icon={Calendar}>
+                    <GameField label={t("tasks.fieldDeadline")} icon={Calendar}>
                       <Input
                         type="datetime-local"
                         value={deadline}
@@ -174,11 +171,11 @@ export function TaskEditDialog({
                         <Swords className="h-4 w-4" strokeWidth={2.5} />
                       </span>
                       <span className="font-bangers text-base sm:text-lg text-white tracking-wide drop-shadow-[0_1px_0_#1C1917]">
-                        投入哪个象限？
+                        {t("tasks.quadrantPrompt")}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                      {CATEGORY_OPTIONS.map((option) => {
+                      {categoryOptions.map((option) => {
                         const style = QUADRANT_STYLES[option.value];
                         const selected = category === option.value;
                         return (
@@ -232,7 +229,7 @@ export function TaskEditDialog({
                   onClick={() => onOpenChange(false)}
                   className="h-12 flex-1 sm:flex-none rounded-xl border-2 border-[#1C1917] bg-white/95 px-6 font-bold text-[#1C1917] comic-shadow-sm hover:bg-amber-50 comic-btn-push"
                 >
-                  取消
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -240,7 +237,7 @@ export function TaskEditDialog({
                   className="h-12 flex-1 sm:flex-none rounded-xl border-2 border-[#1C1917] bg-gradient-to-r from-amber-400 via-orange-400 to-[#F15A24] px-8 font-bangers text-xl tracking-wide text-[#1C1917] comic-shadow-sm comic-btn-push hover:from-amber-300 hover:via-orange-300 hover:to-[#e04f1a] disabled:opacity-50 disabled:from-neutral-400 disabled:via-neutral-400 disabled:to-neutral-500 disabled:shadow-none"
                 >
                   <Sparkles className="h-5 w-5 mr-1.5 inline" />
-                  {saving ? "保存中..." : "保存修改"}
+                  {saving ? t("tasks.saving") : t("tasks.save")}
                 </Button>
               </DialogFooter>
             </form>

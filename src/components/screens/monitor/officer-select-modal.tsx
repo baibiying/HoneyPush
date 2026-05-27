@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Camera } from "lucide-react";
 import { OFFICERS } from "@/lib/officers-data";
+import { useI18n } from "@/i18n/i18n-provider";
 
 interface OfficerSelectModalProps {
   taskText: string;
@@ -17,6 +18,8 @@ export function OfficerSelectModal({
   onClose,
   onLaunch,
 }: OfficerSelectModalProps) {
+  const { t } = useI18n();
+
   const handleSelectOfficer = (officerId: string) => {
     onLaunch(officerId);
     onClose();
@@ -30,7 +33,6 @@ export function OfficerSelectModal({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-          {/* 背景遮罩 */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -39,14 +41,12 @@ export function OfficerSelectModal({
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
 
-          {/* 弹窗内容 */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className="relative z-10 bg-[#FAF4D3] comic-border-2 comic-shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto"
           >
-            {/* 关闭按钮 */}
             <button
               onClick={handleCloseModal}
               className="absolute top-2 right-2 p-1 hover:bg-black/10 transition-colors z-20"
@@ -57,26 +57,24 @@ export function OfficerSelectModal({
             <>
               <div className="bg-rose-500 px-6 py-4 border-b-4 border-[#1C1917]">
                 <h2 className="font-bangers text-2xl md:text-3xl text-white tracking-wider">
-                  选择监督官
+                  {t("monitor.officerModal.title")}
                 </h2>
                 <p className="text-xs text-white/80 font-comic mt-1">
-                  尚未在排期地图选定监督官；选择后将自动开启摄像头监督
+                  {t("monitor.officerModal.subtitle")}
                 </p>
               </div>
 
               <div className="px-6 py-4 border-b-2 border-neutral-300 bg-amber-50">
                 <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider mb-1">
-                  当前任务
+                  {t("monitor.currentTask")}
                 </p>
-                <p className="text-sm font-bold text-neutral-800 leading-relaxed">
-                  {taskText}
-                </p>
+                <p className="text-sm font-bold text-neutral-800 leading-relaxed">{taskText}</p>
               </div>
 
               <div className="px-6 py-3 bg-neutral-100 border-b-2 border-neutral-300 flex items-start gap-3">
                 <Camera className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-neutral-700 leading-relaxed font-comic">
-                  选定监督官后将自动开启摄像头；摸鱼时会播放该监督官的提醒视频。
+                  {t("monitor.officerModal.cameraHint")}
                 </p>
               </div>
 
@@ -92,9 +90,7 @@ export function OfficerSelectModal({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <h3 className="font-bold text-base text-neutral-900 mb-1">
-                          {officer.name}
-                        </h3>
+                        <h3 className="font-bold text-base text-neutral-900 mb-1">{officer.name}</h3>
                         <p className="text-[11px] text-neutral-500 font-semibold mb-2">
                           {officer.title}
                         </p>
@@ -103,7 +99,7 @@ export function OfficerSelectModal({
                         </p>
                       </div>
                       <div className="ml-4 text-xs font-bold text-neutral-400 group-hover:text-neutral-900 transition-colors">
-                        开始监督 →
+                        {t("monitor.officerModal.start")}
                       </div>
                     </div>
                   </motion.button>

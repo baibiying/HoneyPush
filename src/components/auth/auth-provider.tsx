@@ -15,6 +15,7 @@ import {
   TASKS_CHANGED_EVENT,
   emitClientEvent,
 } from "@/lib/client-events";
+import { useI18n } from "@/i18n/i18n-provider";
 import { AuthModal } from "./auth-modal";
 
 export type AuthUser = {
@@ -43,9 +44,9 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function readErrorMessage(response: Response) {
+async function readErrorMessage(response: Response, fallback: string) {
   const payload = await response.json().catch(() => null);
-  return payload?.error ?? "请求失败，请稍后重试";
+  return payload?.error ?? fallback;
 }
 
 async function fetchCurrentUser() {
@@ -57,6 +58,7 @@ async function fetchCurrentUser() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -119,13 +121,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!res.ok) {
-      throw new Error(await readErrorMessage(res));
+      throw new Error(await readErrorMessage(res, t("auth.requestFailed")));
     }
 
     const data = await res.json();
     handleAuthSuccess(data.user as AuthUser);
     return data.user as AuthUser;
-  }, [handleAuthSuccess]);
+  }, [handleAuthSuccess, t]);
 
   const register = useCallback(
     async (input: { email: string; password: string; name?: string }) => {
@@ -136,14 +138,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res));
+        throw new Error(await readErrorMessage(res, t("auth.requestFailed")));
       }
 
       const data = await res.json();
       handleAuthSuccess(data.user as AuthUser);
       return data.user as AuthUser;
     },
-    [handleAuthSuccess]
+    [handleAuthSuccess, t],
   );
 
   const logout = useCallback(async () => {
@@ -154,9 +156,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     emitClientEvent(STATS_CHANGED_EVENT);
   }, []);
 
-  const promptLogin = useCallback((message?: string) => {
-    openAuthModal("login", message ?? "登录后即可保存你的任务和专注记录。");
-  }, [openAuthModal]);
+  const promptLogin = useCallback(
+    (message?: string) => {
+      openAuthModal("login", message ?? t("prompts.defaultLogin"));
+    },
+    [openAuthModal, t],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({

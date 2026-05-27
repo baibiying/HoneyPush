@@ -2,6 +2,7 @@
 
 import { CalendarDays, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/i18n-provider";
 import { FROSTED_PANEL, ScheduleHubBackground } from "./task-form-shared";
 
 type SchedulePromptOverlayProps = {
@@ -25,6 +26,8 @@ export function SchedulePromptOverlay({
   onSchedule,
   onViewCalendar,
 }: SchedulePromptOverlayProps) {
+  const { t } = useI18n();
+
   if (!open) return null;
 
   return (
@@ -46,7 +49,7 @@ export function SchedulePromptOverlay({
               id="schedule-prompt-title"
               className="font-bangers text-2xl sm:text-3xl text-white tracking-wide drop-shadow-[0_2px_0_#1C1917]"
             >
-              {isReschedule ? "需要重新排期" : "开始 AI 排期"}
+              {isReschedule ? t("calendar.promptReschedule") : t("calendar.promptTitle")}
             </h3>
             <ul className="mt-4 space-y-2.5 text-left max-w-sm mx-auto px-2">
               {reasons.map((reason) => (
@@ -79,7 +82,7 @@ export function SchedulePromptOverlay({
                 disabled={loading}
                 className="w-full h-11 sm:h-12 rounded-xl border-2 border-[#1C1917] bg-white/95 px-6 text-base sm:text-lg font-bold text-[#1C1917] comic-shadow-sm hover:bg-amber-50 comic-btn-push disabled:opacity-50"
               >
-                直接查看日历
+                {t("calendar.viewCalendar")}
               </Button>
             </div>
           </div>

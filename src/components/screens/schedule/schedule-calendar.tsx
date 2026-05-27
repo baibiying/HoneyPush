@@ -5,6 +5,8 @@ import { CalendarDays } from "lucide-react";
 import type { ScheduleTask } from "./task-edit-dialog";
 import { FROSTED_FIELD } from "./task-form-shared";
 import { expandScheduledTaskToFocusSegments } from "@/lib/ai/schedule-times";
+import { useI18n } from "@/i18n/i18n-provider";
+import { formatDayLabel } from "@/i18n/format-day-label";
 import { SchedulePomodoroHint } from "./schedule-pomodoro-hint";
 import {
   buildCalendarTaskColorMap,
@@ -50,27 +52,31 @@ function formatDateKey(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function formatDayLabel(date: Date) {
-  return date.toLocaleDateString("zh-CN", {
+function localeDayLabel(date: Date, dateLocale: string) {
+  return date.toLocaleDateString(dateLocale, {
     month: "numeric",
     day: "numeric",
     weekday: "short",
   });
 }
 
-function formatDayHeading(date: Date) {
-  const todayKey = formatDateKey(startOfDay(new Date()));
-  const label = formatDayLabel(date);
-  return formatDateKey(date) === todayKey ? `今天 · ${label}` : label;
+function formatDayHeading(
+  date: Date,
+  dateLocale: string,
+  t: (path: string, params?: Record<string, string | number>) => string,
+) {
+  const dateKey = formatDateKey(date);
+  const label = localeDayLabel(date, dateLocale);
+  return formatDayLabel(dateKey, label, t);
 }
 
 function formatHourLabel(hour: number) {
   return `${String(hour).padStart(2, "0")}:00`;
 }
 
-function formatBlockTimeRange(startAt: string, endAt: string) {
+function formatBlockTimeRange(startAt: string, endAt: string, dateLocale: string) {
   const fmt = (iso: string) =>
-    new Date(iso).toLocaleTimeString("zh-CN", {
+    new Date(iso).toLocaleTimeString(dateLocale, {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -195,6 +201,8 @@ function CalendarTaskBlock({
   stackIndex,
   colorMap,
 }: CalendarTaskBlockProps) {
+  const { locale } = useI18n();
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
   const { task, startAt, endAt } = block;
   const blockRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
@@ -202,7 +210,7 @@ function CalendarTaskBlock({
 
   const { top, height } = layout;
   const palette = getCalendarTaskPalette(task.id, colorMap);
-  const timeRange = formatBlockTimeRange(startAt, endAt);
+  const timeRange = formatBlockTimeRange(startAt, endAt, dateLocale);
   const titleLineClamp =
     height >= 72
       ? "line-clamp-3 text-lg sm:text-xl leading-tight"
@@ -265,6 +273,9 @@ export function ScheduleCalendar({
   tasks,
   embedded = false,
 }: ScheduleCalendarProps) {
+  const { t, locale } = useI18n();
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+
   const scheduledTasks = useMemo(
     () =>
       tasks
@@ -345,16 +356,16 @@ export function ScheduleCalendar({
   const gridWidth = TIME_COLUMN_WIDTH + dayBuckets.length * DAY_COLUMN_WIDTH;
 
   const statusLine = hasAnyScheduled
-    ? `共 ${scheduledTasks.length} 个已排期时段`
-    : "尚未排期 — 点击下方「排期」为全部待办生成日历";
+    ? t("calendar.statusCount", { count: scheduledTasks.length })
+    : t("calendar.statusEmpty");
 
   const emptyState = (
     <div className={`${FROSTED_FIELD} flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-10 text-center`}>
       <CalendarDays className="mx-auto h-9 w-9 text-amber-300/90 mb-3" strokeWidth={2.5} />
-      <p className="font-bangers text-lg text-amber-100/95 tracking-wide">暂无已排期时段</p>
+      <p className="font-bangers text-lg text-amber-100/95 tracking-wide">{t("calendar.noSlots")}</p>
       <SchedulePomodoroHint variant="empty" />
       <p className="text-xs sm:text-sm font-bold text-amber-100/70 mt-3 max-w-xs mx-auto">
-        配置「可用时段」后点击「排期」，任务将显示在下方日历中
+        {t("calendar.emptyHint")}
       </p>
     </div>
   );
@@ -383,7 +394,7 @@ export function ScheduleCalendar({
               className="sticky left-0 z-30 shrink-0 border-r border-white/15 bg-gradient-to-br from-violet-800 to-purple-900 flex items-end justify-center pb-2 px-1"
               style={{ width: TIME_COLUMN_WIDTH }}
             >
-              <span className="text-[10px] sm:text-xs font-bold text-amber-100/90">时间</span>
+              <span className="text-[10px] sm:text-xs font-bold text-amber-100/90">{t("common.time")}</span>
             </div>
             <div className="flex bg-gradient-to-r from-violet-700/95 via-fuchsia-700/95 to-purple-800/95 backdrop-blur-sm">
               {dayBuckets.map((day) => (
@@ -393,7 +404,7 @@ export function ScheduleCalendar({
                   style={{ width: DAY_COLUMN_WIDTH }}
                 >
                   <p className="font-bangers text-[11px] sm:text-xs text-white tracking-wide drop-shadow-[0_1px_0_#1C1917] leading-tight">
-                    {formatDayHeading(day.date)}
+                    {formatDayHeading(day.date, dateLocale, t)}
                   </p>
                 </div>
               ))}
@@ -490,7 +501,7 @@ export function ScheduleCalendar({
       <div className="flex items-center justify-between pb-2 border-b-2 border-[#1C1917]">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-5 h-5 text-[#F15A24]" />
-          <h3 className="font-bangers text-lg tracking-wide text-[#1C1917]">执行日历</h3>
+          <h3 className="font-bangers text-lg tracking-wide text-[#1C1917]">{t("calendar.title")}</h3>
         </div>
         <span className="text-[10px] font-bold text-neutral-600">{statusLine}</span>
       </div>

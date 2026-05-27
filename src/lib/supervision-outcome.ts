@@ -66,46 +66,7 @@ export type TaskFailureCause =
   | "cancelled"
   | "other";
 
-export function resolveTaskFailureCause(reason: string): TaskFailureCause {
-  if (reason.includes("摄像头")) return "camera-closed";
-  if (reason.includes("三星") || reason.includes("摸鱼")) return "strikes-exhausted";
-  if (reason.includes("采集") || reason.includes("人脸")) return "enrollment-timeout";
-  if (reason.includes("取消")) return "cancelled";
-  return "other";
-}
-
-export function getTaskFailureCauseDisplay(cause: TaskFailureCause): {
-  headline: string;
-  summary: string;
-} {
-  switch (cause) {
-    case "camera-closed":
-      return {
-        headline: "手动关闭摄像头",
-        summary: "监督期间摄像头被关闭，本段专注视为失败，整个任务终止。",
-      };
-    case "strikes-exhausted":
-      return {
-        headline: "摸鱼 · 三颗星扣完",
-        summary: "监督期间摸鱼次数达到上限，尤里教官判定本段失败，整个任务终止。",
-      };
-    case "enrollment-timeout":
-      return {
-        headline: "人脸采集超时",
-        summary: "规定时间内未完成人脸采集，无法进入监督，任务终止。",
-      };
-    case "cancelled":
-      return {
-        headline: "取消监督",
-        summary: "监督流程已取消，任务未继续执行。",
-      };
-    default:
-      return {
-        headline: "未达成监督要求",
-        summary: "未满足完成条件，任务终止。",
-      };
-  }
-}
+export { resolveTaskFailureCauseBilingual as resolveTaskFailureCause } from "@/lib/monitor-i18n";
 
 export function buildOutcomeStats(params: {
   taskText: string;
