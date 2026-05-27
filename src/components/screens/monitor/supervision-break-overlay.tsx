@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Coffee, Hourglass, Swords, Sparkles } from "lucide-react";
 import {
@@ -7,22 +8,39 @@ import {
   formatCountdownSeconds,
 } from "@/lib/supervision-blocks";
 import { useI18n } from "@/i18n/i18n-provider";
-import { formatBreakDurationHintLocalized } from "@/lib/monitor-i18n";
+import {
+  formatBlockLabelLocalized,
+  formatBlockStartTimeLocalized,
+  formatBreakDurationHintLocalized,
+} from "@/lib/monitor-i18n";
 
 type SupervisionBreakOverlayProps = {
-  nextBlockLabel: string;
-  nextBlockStartLabel: string;
+  nextBlockIndex: number;
+  totalBlocks: number;
+  nextBlockStartAt: string;
   secondsRemaining: number;
   taskText?: string;
 };
 
 export function SupervisionBreakOverlay({
-  nextBlockLabel,
-  nextBlockStartLabel,
+  nextBlockIndex,
+  totalBlocks,
+  nextBlockStartAt,
   secondsRemaining,
   taskText,
 }: SupervisionBreakOverlayProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+
+  const nextBlockLabel = useMemo(
+    () => formatBlockLabelLocalized(nextBlockIndex, totalBlocks, t),
+    [nextBlockIndex, totalBlocks, t, locale]
+  );
+  const nextBlockStartLabel = useMemo(
+    () => formatBlockStartTimeLocalized(nextBlockStartAt, dateLocale),
+    [nextBlockStartAt, dateLocale]
+  );
+
   const canStart = secondsRemaining <= 0;
   const breakTotal = Math.max(1, SUPERVISION_BREAK_SECONDS);
   const elapsed = Math.max(0, breakTotal - secondsRemaining);

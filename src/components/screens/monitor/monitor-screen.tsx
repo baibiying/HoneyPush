@@ -175,8 +175,6 @@ export function MonitorScreen() {
     nextIndex: number;
     taskText: string;
     secondsRemaining: number;
-    nextBlockLabel: string;
-    nextBlockStartLabel: string;
   } | null>(null);
   const breakPhaseRef = useRef(false);
   /** 本段采集截止（与是否已开摄像头无关） */
@@ -1117,8 +1115,6 @@ export function MonitorScreen() {
         nextIndex: pending.nextIndex,
         taskText: pending.taskText,
         secondsRemaining,
-        nextBlockLabel: formatBlockLabelLocalized(pending.nextIndex, pending.blocks.length, t),
-        nextBlockStartLabel: formatBlockStartTimeLocalized(nextBlock.startAt, dateLocale),
       });
       addLog(
         t("monitor.log.breakUntil", {
@@ -1128,7 +1124,7 @@ export function MonitorScreen() {
         "normal"
       );
     },
-    [addLog, dateLocale, startNextFocusBlock, t]
+    [addLog, startNextFocusBlock, t]
   );
 
   const handleStartBreak = useCallback(() => {
@@ -1170,8 +1166,9 @@ export function MonitorScreen() {
           {breakPhase && (
             <SupervisionBreakOverlay
               key="supervision-break"
-              nextBlockLabel={breakPhase.nextBlockLabel}
-              nextBlockStartLabel={breakPhase.nextBlockStartLabel}
+              nextBlockIndex={breakPhase.nextIndex}
+              totalBlocks={breakPhase.blocks.length}
+              nextBlockStartAt={breakPhase.blocks[breakPhase.nextIndex]?.startAt ?? ""}
               secondsRemaining={breakPhase.secondsRemaining}
               taskText={breakPhase.taskText}
             />
