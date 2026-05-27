@@ -10,17 +10,13 @@ import {
   useImperativeHandle,
 } from "react";
 import {
-  getLevelBannerLabel,
   getOfficerAlertClip,
   getOfficerFocusClip,
   OFFICERS,
 } from "@/lib/officers-data";
 import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-video";
 import { YuriOfficerVideo } from "@/components/screens/monitor/yuri-officer-video";
-import {
-  YuriStrikeStars,
-  yuriStrikeActionLabel,
-} from "@/components/screens/monitor/yuri-strike-stars";
+import { YuriStrikeStars } from "@/components/screens/monitor/yuri-strike-stars";
 import {
   primeUnmutedVideoPlayback,
   unlockBrowserAudio,
@@ -875,21 +871,27 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
         {showDistractionBanner && (
           <div
-            className="absolute inset-0 z-[20] flex items-center justify-center p-4 sm:p-6 pointer-events-none"
+            className={[
+              "absolute z-[20] pointer-events-none",
+              "left-2 right-[38%] sm:left-3 sm:right-[42%]",
+              "bottom-12 sm:bottom-14",
+            ].join(" ")}
             role="alert"
             aria-live="assertive"
           >
-            <div className="w-full max-w-xl comic-border-2 border-rose-500 bg-rose-950/95 px-5 py-5 sm:px-8 sm:py-7 text-center shadow-[0_8px_0_#1c1917]">
-              <p className="font-bangers text-2xl sm:text-3xl md:text-4xl tracking-wide text-rose-300 animate-pulse">
-                摸鱼警报 ·{" "}
-                {isYuriOfficer
-                  ? yuriStrikeActionLabel(yuriStrikeCount)
-                  : getLevelBannerLabel(distractionLevel)}
+            <div className="w-full max-w-lg comic-border-2 border-rose-500 bg-rose-950/92 px-3 py-3 sm:px-4 sm:py-4 text-left shadow-[0_6px_0_#1c1917] backdrop-blur-[2px]">
+              <p className="font-bangers text-xl sm:text-2xl tracking-wide text-rose-300 animate-pulse">
+                摸鱼警报
+                {isYuriOfficer && yuriStrikeCount > 0 && (
+                  <span className="ml-2 text-base sm:text-lg font-mono text-rose-200/90">
+                    第 {yuriStrikeCount}/3 次
+                  </span>
+                )}
               </p>
-              <p className="mt-3 sm:mt-4 text-lg sm:text-xl md:text-2xl font-bold leading-snug text-white">
+              <p className="mt-1.5 sm:mt-2 text-sm sm:text-base font-bold leading-snug text-white line-clamp-3">
                 {mockEventText}
               </p>
-              <p className="mt-3 sm:mt-4 text-sm sm:text-base font-mono text-rose-200/90">
+              <p className="mt-1.5 text-xs sm:text-sm font-mono text-rose-200/85">
                 {isYuriOfficer
                   ? yuriStrikeCount >= 3
                     ? "三次摸鱼，任务即将判定失败"
@@ -914,11 +916,11 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
               {isYuriOfficer
                 ? !yuriSupervisionEnabled
                   ? "开场白"
-                  : showDistractionBanner
-                    ? yuriStrikeActionLabel(yuriStrikeCount)
+                  : showDistractionBanner || isDistracted
+                    ? "摸鱼警报"
                     : "专注陪伴"
-                : isDistracted
-                  ? getLevelBannerLabel(distractionLevel)
+                : showDistractionBanner || isDistracted
+                  ? "摸鱼警报"
                   : "专注陪伴"}
             </span>
             {!showDistractionBanner && !isDistracted && yuriSupervisionEnabled && (
