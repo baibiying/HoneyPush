@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { CalendarDays, ChevronDown, Clock, LayoutGrid, Shield, X } from "lucide-react";
 import { ScheduleAdventureMap } from "./schedule-adventure-map";
+import { HomeCommanderDock } from "./home-commander-dock";
 
 import type { ScheduleScene } from "./schedule-stations";
 
@@ -78,24 +79,30 @@ function MapOceanBackdrop() {
 
 function GameHud() {
   return (
-    <div className="relative w-full px-4 py-2.5 sm:px-6 sm:py-3 md:px-8">
+    <div className="relative w-full px-4 py-2 sm:px-6 sm:py-2.5 md:px-8">
       <div
         className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent"
         aria-hidden
       />
 
-      <div className="relative z-[1] flex w-full flex-col gap-0.5 sm:gap-1">
-        <div className="flex items-baseline justify-center gap-x-2 sm:gap-x-3">
-          <span className="font-bangers text-3xl sm:text-5xl md:text-6xl text-amber-200 tracking-wide leading-none drop-shadow-[0_3px_0_#1C1917]">
-            HoneyPush
-          </span>
-          <h1 className="font-bangers text-3xl sm:text-5xl md:text-6xl text-white tracking-wide leading-none drop-shadow-[0_3px_0_#1C1917]">
-            督蜜
-          </h1>
+      <div className="relative z-[1] flex w-full flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+        <div className="min-w-0 flex flex-col gap-0.5 sm:gap-1">
+          <div className="flex items-baseline justify-center gap-x-2 sm:gap-x-3 lg:justify-start">
+            <span className="font-bangers text-3xl sm:text-5xl md:text-6xl text-amber-200 tracking-wide leading-none drop-shadow-[0_3px_0_#1C1917]">
+              HoneyPush
+            </span>
+            <h1 className="font-bangers text-3xl sm:text-5xl md:text-6xl text-white tracking-wide leading-none drop-shadow-[0_3px_0_#1C1917]">
+              督蜜
+            </h1>
+          </div>
+          <p className="text-center lg:text-left font-comic text-base sm:text-lg md:text-xl font-bold leading-snug text-amber-100/95">
+            AI 智能排期 + 游戏化监督 · 理清任务、专注执行
+          </p>
         </div>
-        <p className="w-full text-right font-comic text-base sm:text-lg md:text-xl lg:text-2xl font-bold leading-snug text-amber-100/95">
-          AI 智能排期 + 游戏化监督 · 理清任务、专注执行
-        </p>
+
+        <div className="flex justify-center lg:justify-end lg:pt-1">
+          <HomeCommanderDock />
+        </div>
       </div>
     </div>
   );
@@ -159,11 +166,6 @@ export function ScheduleGameHub({
             <div className="relative flex flex-1 min-h-0 w-full flex-col overflow-hidden animate-[fadeIn_0.35s_ease-out]">
               <div className="shrink-0 z-20 w-full border-b border-white/15 bg-[#312e81]/75 backdrop-blur-md shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
                 <GameHud />
-                {!canEdit && (
-                  <p className="mx-4 mb-3 sm:mx-6 rounded-lg border-2 border-amber-400/55 bg-amber-500/15 px-3 py-1.5 text-center text-[11px] sm:text-xs font-bold text-amber-100 backdrop-blur-sm shadow-[0_2px_0_#1C1917]">
-                    🔒 浏览模式 · 登录后可登岛冒险
-                  </p>
-                )}
               </div>
 
               {mapPerformanceDock}

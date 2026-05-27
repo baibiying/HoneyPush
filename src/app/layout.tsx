@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { cn } from "@/utils/utils";
 import { Toaster } from "@/components/ui/sonner";
-import { AppHeader } from "@/components/layout/app-header";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { GlobalScheduledTaskRunner } from "@/components/layout/global-scheduled-task-runner";
 import { GlobalSupervisionTakeover } from "@/components/layout/global-supervision-takeover";
@@ -13,23 +12,27 @@ const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : undefined;
 
+const APP_NAME = "HoneyPush 督蜜";
+const APP_DESCRIPTION =
+  "AI 智能排期 + 游戏化监督，理清任务、专注执行。监督官陪你 25 分钟，摸鱼当场抓包。";
+
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
-  title: "专注局 Focus Bureau",
-  description: "结合 AI 动作识别与游戏化惩戒的铁血效率工具，1950s 原子朋克漫画风格",
+  title: APP_NAME,
+  description: APP_DESCRIPTION,
   icons: { icon: "https://eazo.ai/favicon.ico" },
   openGraph: {
     type: "website",
-    siteName: "专注局",
-    title: "专注局 Focus Bureau",
-    description: "AI 监督官陪你专注 25 分钟，摸鱼当场抓包",
+    siteName: "HoneyPush",
+    title: APP_NAME,
+    description: APP_DESCRIPTION,
     url: "/",
     locale: "zh_CN",
   },
   twitter: {
     card: "summary_large_image",
-    title: "专注局 Focus Bureau",
-    description: "AI 监督官陪你专注 25 分钟",
+    title: APP_NAME,
+    description: APP_DESCRIPTION,
   },
 };
 
@@ -67,12 +70,7 @@ export default function RootLayout({
           <GlobalUpcomingTaskToasts />
           <GlobalScheduledTaskRunner />
           <GlobalSupervisionTakeover />
-          {/* Header — sticky at top */}
-          <AppHeader />
-          {/* Main content
-              Mobile:  header≈56px + bottom-nav≈56px + Eazo底栏≈72px → pb-[140px]
-              Desktop: header≈88px(两行) + Eazo底栏≈72px余量 → pt-[96px] pb-[120px] */}
-          <main className="flex-1 pt-[60px] pb-[80px] md:pt-[96px] md:pb-[96px]">
+          <main className="flex-1 pb-[80px] md:pb-[96px]">
             <MainContentShell>{children}</MainContentShell>
           </main>
           <Toaster />
