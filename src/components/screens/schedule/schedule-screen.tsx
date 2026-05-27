@@ -29,6 +29,7 @@ import {
   getClientTimezoneOffsetMinutes,
   type AvailabilitySlotInput,
 } from "@/lib/ai/availability";
+import { excludePastDeadlineTasks } from "@/lib/schedule-execution";
 
 const AVAILABILITY_STORAGE_KEY = "honeypush-availability-v1";
 const SCHEDULE_SNAPSHOT_KEY = "honeypush-schedule-snapshot-v1";
@@ -141,15 +142,20 @@ export function ScheduleScreen() {
     return () => window.removeEventListener(PREFERRED_OFFICER_CHANGED_EVENT, refresh);
   }, []);
 
+  const activeTasks = useMemo(
+    () => excludePastDeadlineTasks(tasks),
+    [tasks]
+  );
+
   const stats = useMemo(() => {
-    const pending = tasks.filter((task) => !task.checked).length;
-    const done = tasks.length - pending;
-    return { total: tasks.length, pending, done };
-  }, [tasks]);
+    const pending = activeTasks.filter((task) => !task.checked).length;
+    const done = activeTasks.length - pending;
+    return { total: activeTasks.length, pending, done };
+  }, [activeTasks]);
 
   const pendingTasks = useMemo(
-    () => tasks.filter((task) => !task.checked),
-    [tasks]
+    () => activeTasks.filter((task) => !task.checked),
+    [activeTasks]
   );
 
   const scheduledCount = useMemo(
@@ -722,7 +728,7 @@ export function ScheduleScreen() {
           ) : (
           <QuadrantTaskBoard
             fullscreen
-            tasks={tasks}
+            tasks={activeTasks}
             openTaskMenuId={openTaskMenuId}
             canEdit={canEdit}
             onRequireLogin={() => promptLogin("登录后才能编辑或删除任务。")}
@@ -776,7 +782,7 @@ export function ScheduleScreen() {
         schedulePanel={
           <ScheduleCalendar
             key={calendarRefreshKey}
-            tasks={tasks}
+            tasks={activeTasks}
             embedded
           />
         }

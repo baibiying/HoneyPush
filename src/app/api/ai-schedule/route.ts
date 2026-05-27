@@ -15,6 +15,7 @@ import {
 import { rankTasksForSchedule } from "@/lib/ai/schedule-priority";
 import { assignScheduleTimes } from "@/lib/ai/schedule-times";
 import { requireUser } from "@/lib/auth/session";
+import { isTaskPastDeadline } from "@/lib/schedule-execution";
 
 const VALID_CATEGORIES = new Set([
   "import-urgent",
@@ -196,7 +197,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请先添加至少一个任务" }, { status: 400 });
   }
 
-  const missingDeadline = sourceTasks.filter((task) => !task.deadline);
+  const schedulableTasks = sourceTasks.filter(
+    (task) => !isTaskPastDeadline({ deadline: task.deadline ?? null })
+  );
+
+  if (schedulableTasks.length === 0) {
+    return NextResponse.json(
+      { error: "没有可排期的任务（待排任务均已过截止时间）" },
+      { status: 400 }
+    );
+  }
+
+  const missingDeadline = schedulableTasks.filter((task) => !task.deadline);
   if (missingDeadline.length > 0) {
     return NextResponse.json(
       { error: "请为每个待排期任务填写截止时间（deadline）" },
@@ -205,7 +217,7 @@ export async function POST(req: NextRequest) {
   }
 
   const buildResponse = (schedule: AiScheduleItem[], unscheduledIds: number[], source: string) => {
-    const unscheduledTasks = sourceTasks
+    const unscheduledTasks = schedulableTasks
       .filter((task) => unscheduledIds.includes(task.id))
       .map((task) => ({ id: task.id, text: task.text }));
     return NextResponse.json({ schedule, unscheduledIds, unscheduledTasks, source });
@@ -214,7 +226,7 @@ export async function POST(req: NextRequest) {
   const runSchedule = (parsed: unknown) => {
     const { schedule, unscheduledIds } = normalizeSchedule(
       parsed,
-      sourceTasks,
+      schedulableTasks,
       availability,
       timezoneOffsetMinutes
     );
@@ -223,7 +235,7 @@ export async function POST(req: NextRequest) {
 
   if (!isLlmConfigured()) {
     const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(
-      sourceTasks,
+      schedulableTasks,
       availability,
       timezoneOffsetMinutes
     );
@@ -231,7 +243,7 @@ export async function POST(req: NextRequest) {
   }
 
   const userPayload = JSON.stringify(
-    { availability, tasks: sourceTasks },
+    { availability, tasks: schedulableTasks },
     null,
     2
   );
@@ -248,7 +260,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("AI schedule error:", err);
     const { schedule, unscheduledIds } = buildFallbackScheduleFromTasks(
-      sourceTasks,
+      schedulableTasks,
       availability,
       timezoneOffsetMinutes
     );

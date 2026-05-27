@@ -3,7 +3,6 @@
 import { CalendarDays, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FROSTED_PANEL, ScheduleHubBackground } from "./task-form-shared";
-import { SchedulePomodoroHint } from "./schedule-pomodoro-hint";
 
 type SchedulePromptOverlayProps = {
   open: boolean;
@@ -49,7 +48,6 @@ export function SchedulePromptOverlay({
             >
               {isReschedule ? "需要重新排期" : "开始 AI 排期"}
             </h3>
-            <SchedulePomodoroHint variant="panel" className="max-w-md mx-auto" />
             <ul className="mt-4 space-y-2.5 text-left max-w-sm mx-auto px-2">
               {reasons.map((reason) => (
                 <li

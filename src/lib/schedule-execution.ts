@@ -9,6 +9,25 @@ export type ScheduledTaskLike = {
   checked?: boolean;
 };
 
+export type TaskWithDeadline = {
+  deadline: string | null;
+};
+
+/** 任务截止时刻已过（无 deadline 的任务不算过期） */
+export function isTaskPastDeadline(task: TaskWithDeadline, now = new Date()): boolean {
+  if (!task.deadline) return false;
+  const deadline = new Date(task.deadline);
+  if (Number.isNaN(deadline.getTime())) return false;
+  return deadline.getTime() < now.getTime();
+}
+
+export function excludePastDeadlineTasks<T extends TaskWithDeadline>(
+  tasks: T[],
+  now = new Date()
+): T[] {
+  return tasks.filter((task) => !isTaskPastDeadline(task, now));
+}
+
 export type TaskExecutionPhase = "unscheduled" | "upcoming" | "active" | "ended";
 
 export function getTaskExecutionPhase(

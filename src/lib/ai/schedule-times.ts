@@ -4,6 +4,7 @@ import {
   type AvailabilityWindow,
 } from "./availability";
 import { compareTasksForSchedule } from "./schedule-priority";
+import { localDateTimeToUtc } from "./timezone";
 
 /** 番茄钟：专注时长 + 段间休息（与 PRODUCT.md 一致） */
 export const POMODORO_FOCUS_MINUTES = 25;
@@ -15,6 +16,7 @@ export const SCHEDULE_POMODORO_HINT = `排期按番茄钟拆分：每段专注 $
 export const TASK_GAP_MINUTES = 10;
 
 const STEP_MS = 5 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type PomodoroSegment = { kind: "focus" | "break"; minutes: number };
 
@@ -66,6 +68,55 @@ export type TaskFocusSegment = {
 
 function rangesOverlap(start: number, end: number, occupied: TimeRangeMs[]) {
   return occupied.some((slot) => start < slot.end && end > slot.start);
+}
+
+function getLocalDayStartMs(instant: Date, timezoneOffsetMinutes?: number): number {
+  if (timezoneOffsetMinutes === undefined) {
+    const day = new Date(instant);
+    day.setHours(0, 0, 0, 0);
+    return day.getTime();
+  }
+
+  const shiftedMs = instant.getTime() - timezoneOffsetMinutes * 60 * 1000;
+  const shifted = new Date(shiftedMs);
+  return localDateTimeToUtc(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth() + 1,
+    shifted.getUTCDate(),
+    0,
+    0,
+    timezoneOffsetMinutes
+  ).getTime();
+}
+
+function clipWindowsToLocalDay(
+  windows: AvailabilityWindow[],
+  dayStartMs: number
+): AvailabilityWindow[] {
+  const dayEndMs = dayStartMs + DAY_MS;
+  const clipped: AvailabilityWindow[] = [];
+
+  for (const window of windows) {
+    const startMs = Math.max(window.start.getTime(), dayStartMs);
+    const endMs = Math.min(window.end.getTime(), dayEndMs);
+    if (endMs > startMs) {
+      clipped.push({ start: new Date(startMs), end: new Date(endMs) });
+    }
+  }
+
+  return clipped;
+}
+
+/** 从可用时段中提取不重复的本地日期（升序） */
+function collectLocalDayStarts(
+  windows: AvailabilityWindow[],
+  timezoneOffsetMinutes?: number
+): number[] {
+  const days = new Set<number>();
+  for (const window of windows) {
+    days.add(getLocalDayStartMs(window.start, timezoneOffsetMinutes));
+  }
+  return [...days].sort((a, b) => a - b);
 }
 
 function advanceNotBefore(
@@ -139,50 +190,105 @@ function placeTaskWithPomodoros(
   item: { id: number; category: string; durationMinutes: number; order: number },
   deadline: Date | null,
   occupied: TimeRangeMs[],
-  scheduleStartAfter: Date
+  scheduleStartAfter: Date,
+  timezoneOffsetMinutes?: number
 ): { placed: TimedScheduleItem | null; notBefore: Date } {
   const segments = planPomodoroSegments(item.durationMinutes);
-  let firstFocusStart: Date | null = null;
-  let lastFocusEnd: Date | null = null;
-  const focusSegments: ScheduledFocusSegment[] = [];
-  let notBefore = scheduleStartAfter;
 
-  for (const segment of segments) {
-    if (segment.kind === "break") {
-      const afterBreak = advanceNotBefore(windows, notBefore, segment.minutes);
-      if (!afterBreak) return { placed: null, notBefore };
-      notBefore = afterBreak;
-      continue;
+  /** restrictDayStart 为 null 时允许跨天；否则整任务必须落在该本地日 */
+  const attempt = (
+    restrictDayStart: number | null
+  ): { placed: TimedScheduleItem | null; notBefore: Date; addedRanges: TimeRangeMs[] } => {
+    const dayWindows =
+      restrictDayStart === null
+        ? windows
+        : clipWindowsToLocalDay(windows, restrictDayStart);
+
+    if (dayWindows.length === 0) {
+      return { placed: null, notBefore: scheduleStartAfter, addedRanges: [] };
     }
 
-    const durationMs = segment.minutes * 60 * 1000;
-    const slot = findEarliestFocusSlot(windows, durationMs, notBefore, occupied, deadline);
-    if (!slot) return { placed: null, notBefore };
+    const trialOccupied = [...occupied];
+    let firstFocusStart: Date | null = null;
+    let lastFocusEnd: Date | null = null;
+    const focusSegments: ScheduledFocusSegment[] = [];
 
-    if (!firstFocusStart) firstFocusStart = slot.start;
-    lastFocusEnd = slot.end;
-    focusSegments.push({
-      startAt: slot.start.toISOString(),
-      endAt: slot.end.toISOString(),
-    });
+    let notBefore = scheduleStartAfter;
+    if (restrictDayStart !== null) {
+      const dayEndMs = restrictDayStart + DAY_MS;
+      if (notBefore.getTime() >= dayEndMs) {
+        return { placed: null, notBefore: scheduleStartAfter, addedRanges: [] };
+      }
+      const earliestOnDay = dayWindows[0].start.getTime();
+      notBefore = new Date(
+        Math.max(notBefore.getTime(), restrictDayStart, earliestOnDay)
+      );
+    }
 
-    occupied.push({ start: slot.start.getTime(), end: slot.end.getTime() });
-    notBefore = slot.end;
-  }
+    for (const segment of segments) {
+      if (segment.kind === "break") {
+        const afterBreak = advanceNotBefore(dayWindows, notBefore, segment.minutes);
+        if (!afterBreak) return { placed: null, notBefore: scheduleStartAfter, addedRanges: [] };
+        notBefore = afterBreak;
+        continue;
+      }
 
-  if (!firstFocusStart || !lastFocusEnd) {
-    return { placed: null, notBefore };
-  }
+      const durationMs = segment.minutes * 60 * 1000;
+      const slot = findEarliestFocusSlot(
+        dayWindows,
+        durationMs,
+        notBefore,
+        trialOccupied,
+        deadline
+      );
+      if (!slot) return { placed: null, notBefore: scheduleStartAfter, addedRanges: [] };
 
-  return {
-    placed: {
-      ...item,
-      scheduledStartAt: firstFocusStart.toISOString(),
-      scheduledEndAt: lastFocusEnd.toISOString(),
-      focusSegments,
-    },
-    notBefore,
+      if (!firstFocusStart) firstFocusStart = slot.start;
+      lastFocusEnd = slot.end;
+      focusSegments.push({
+        startAt: slot.start.toISOString(),
+        endAt: slot.end.toISOString(),
+      });
+
+      trialOccupied.push({ start: slot.start.getTime(), end: slot.end.getTime() });
+      notBefore = slot.end;
+    }
+
+    if (!firstFocusStart || !lastFocusEnd) {
+      return { placed: null, notBefore: scheduleStartAfter, addedRanges: [] };
+    }
+
+    return {
+      placed: {
+        ...item,
+        scheduledStartAt: firstFocusStart.toISOString(),
+        scheduledEndAt: lastFocusEnd.toISOString(),
+        focusSegments,
+      },
+      notBefore,
+      addedRanges: trialOccupied.slice(occupied.length),
+    };
   };
+
+  const candidateDays = collectLocalDayStarts(windows, timezoneOffsetMinutes).filter(
+    (dayStart) => dayStart + DAY_MS > scheduleStartAfter.getTime()
+  );
+
+  for (const dayStart of candidateDays) {
+    const onDay = attempt(dayStart);
+    if (onDay.placed) {
+      occupied.push(...onDay.addedRanges);
+      return { placed: onDay.placed, notBefore: onDay.notBefore };
+    }
+  }
+
+  const crossDay = attempt(null);
+  if (crossDay.placed) {
+    occupied.push(...crossDay.addedRanges);
+    return { placed: crossDay.placed, notBefore: crossDay.notBefore };
+  }
+
+  return { placed: null, notBefore: scheduleStartAfter };
 }
 
 function parseStoredFocusSegments(
@@ -288,7 +394,8 @@ export function assignScheduleTimes(
       item,
       deadline,
       occupied,
-      scheduleStartAfter
+      scheduleStartAfter,
+      timezoneOffsetMinutes
     );
 
     if (!placed) {
