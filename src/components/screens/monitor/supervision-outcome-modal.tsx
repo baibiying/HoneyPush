@@ -20,6 +20,7 @@ import type { TaskFailureCause } from "@/lib/supervision-outcome";
 import {
   getTaskFailureCauseDisplayLocalized,
   resolveTaskFailureCauseBilingual,
+  translateDistractionOrHint,
 } from "@/lib/monitor-i18n";
 import { useI18n } from "@/i18n/i18n-provider";
 import { SUPERVISION_MAX_STRIKES } from "@/lib/supervision-blocks";
@@ -114,7 +115,7 @@ function DistractionBattleLog({ stats }: { stats: SupervisionOutcomeStats }) {
               })}
             </p>
             <p className="mt-1 text-base sm:text-lg font-bold text-white/95 leading-snug">
-              {item.reason}
+              {translateDistractionOrHint(item.reason, t)}
             </p>
           </div>
         </li>
