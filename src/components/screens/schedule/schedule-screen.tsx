@@ -588,23 +588,43 @@ export function ScheduleScreen() {
           return;
         }
 
-        const updatedTasks = await Promise.all(
-          plan.map((item) =>
-            updateTaskById(item.id, {
-              category: item.category,
-              durationMinutes: item.durationMinutes,
-              scheduledStartAt: item.scheduledStartAt,
-              scheduledEndAt: item.scheduledEndAt,
-              scheduledFocusSegments: item.focusSegments ?? null,
-            })
-          )
-        );
+        const plannedIds = new Set(plan.map((item) => item.id));
+        const unscheduled = Array.isArray(data.unscheduledIds) ? data.unscheduledIds : [];
+        const unscheduledSet = new Set(unscheduled);
+
+        // Clear stale schedule from tasks that no longer fit this scheduling run.
+        const staleScheduleIds = pendingTasks
+          .filter((task) => !plannedIds.has(task.id) || unscheduledSet.has(task.id))
+          .map((task) => task.id);
+
+        const [scheduledUpdates, clearedUpdates] = await Promise.all([
+          Promise.all(
+            plan.map((item) =>
+              updateTaskById(item.id, {
+                category: item.category,
+                durationMinutes: item.durationMinutes,
+                scheduledStartAt: item.scheduledStartAt,
+                scheduledEndAt: item.scheduledEndAt,
+                scheduledFocusSegments: item.focusSegments ?? null,
+              })
+            )
+          ),
+          Promise.all(
+            staleScheduleIds.map((id) =>
+              updateTaskById(id, {
+                scheduledStartAt: null,
+                scheduledEndAt: null,
+                scheduledFocusSegments: null,
+              })
+            )
+          ),
+        ]);
+        const updatedTasks = [...scheduledUpdates, ...clearedUpdates];
 
         setTasks((prev) =>
           prev.map((task) => updatedTasks.find((item) => item.id === task.id) ?? task)
         );
 
-        const unscheduled = Array.isArray(data.unscheduledIds) ? data.unscheduledIds : [];
         if (unscheduled.length > 0) {
           const namesFromApi = Array.isArray(data.unscheduledTasks)
             ? data.unscheduledTasks.map((item) => item.text).filter(Boolean)
