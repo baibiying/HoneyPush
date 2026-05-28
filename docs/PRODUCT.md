@@ -91,11 +91,9 @@ Natural-language (or manual) task intake; AI extracts deadline, duration, Eisenh
 
 Focus coins from completed blocks, officer preference signals, and privacy-by-default (CV runs locally; frames are not sent to cloud vision APIs).
 
----
+### 7.5 Injective integration (Roadmap)
 
-## 8) Injective (Roadmap)
-
-Not integrated today. Future direction: tokenize focus coins on Injective with wallet claim, streak rewards, and leaderboard/achievement settlement.
+Focus coins may evolve into an Injective on-chain token, with wallet claiming, streak rewards, and leaderboard/achievement settlement. This part is not implemented yet.
 
 ---
 
@@ -188,8 +186,9 @@ Not integrated today. Future direction: tokenize focus coins on Injective with w
 
 通过专注块获得专注币，沉淀监督偏好；隐私默认本地优先（摄像头画面不上传云端进行视觉识别）。
 
+### 7.5 Injective 集成说明（规划）
+
+「专注币」可演进为 Injective 链上代币，结合钱包领取、连续专注奖励、排行榜/成就结算。该部分尚未实现。
+
 ---
 
-## 8）Injective（规划）
-
-当前未集成。未来可将专注币代币化并接入 Injective，实现钱包领取、连续专注奖励、排行榜/成就结算。

@@ -33,10 +33,7 @@ LLM calls run on the server only (`LLM_API_KEY` / `OPENAI_API_KEY`). Rule-based 
 
 ### Injective integration
 
-**Current status:** not integrated.  
-No Injective SDK, wallet, or on-chain logic exists in the current codebase.
-
-**Future possibility:** focus coins may become tokenized on Injective, with wallet claiming, streak rewards, and leaderboard/achievement settlement. This is roadmap only.
+Focus coins may evolve into an Injective on-chain token, with wallet claiming, streak rewards, and leaderboard/achievement settlement. This part is not implemented yet.
 
 ### Local development
 
@@ -112,10 +109,7 @@ LLM 仅在服务端调用（`LLM_API_KEY` / `OPENAI_API_KEY`），未配置时�
 
 ### Injective 集成说明
 
-**当前状态：** 未集成。  
-当前代码库没有 Injective SDK、钱包或链上交易逻辑。
-
-**未来可能性：** 「专注币」可演进为 Injective 链上代币，结合钱包领取、连续专注奖励、排行榜/成就结算。该部分尚未实现。
+「专注币」可演进为 Injective 链上代币，结合钱包领取、连续专注奖励、排行榜/成就结算。该部分尚未实现。
 
 ### 本地开发
 
