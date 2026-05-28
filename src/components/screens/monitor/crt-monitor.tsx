@@ -73,9 +73,10 @@ import {
   translatePoseHint,
 } from "@/lib/monitor-i18n";
 import {
-  getFaceApiWeightsUris,
-  withTimeout,
-} from "@/lib/face-tracking/face-model-uri";
+  loadFaceApiRuntime,
+  resetFaceApiCache,
+  type FaceApiLoadStage,
+} from "@/lib/face-tracking/load-face-api";
 
 export type CrtMonitorHandle = {
   startCamera: () => Promise<void>;
@@ -191,6 +192,8 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
   onEnrollmentFailedRef.current = onEnrollmentFailed;
 
   const [detectionStatus, setDetectionStatus] = useState<TrackerDetectionStatus>("idle");
+  const [modelLoadStage, setModelLoadStage] = useState<FaceApiLoadStage | null>(null);
+  const [modelLoadSlow, setModelLoadSlow] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [userFaceMatched, setUserFaceMatched] = useState(false);
   const [yuriSupervisionEnabled, setYuriSupervisionEnabled] = useState(false);
@@ -302,69 +305,61 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     }
   }, [isYuriOfficer, notifyEnrollmentReady]);
 
+  const applyFaceModelReady = useCallback(() => {
+    if (recognitionReadyRef.current) {
+      enrollmentDeadlineRef.current = Date.now() + ENROLLMENT_TIMEOUT_MS;
+      enrollmentTimeoutFiredRef.current = false;
+      setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_SECONDS);
+      setEnrollmentPhase("enrolling");
+      setDetectionStatus("enrolling");
+    } else {
+      setEnrollmentPhase("ready");
+      setDetectionStatus("detecting");
+      notifyEnrollmentReady();
+    }
+  }, [notifyEnrollmentReady]);
+
   const loadFaceApi = useCallback(async () => {
     if (faceApiRef.current) return true;
-    const weightUris = getFaceApiWeightsUris();
-    let lastError: unknown;
-
-    const loadFromFirstWorkingUri = async (
-      load: (uri: string) => Promise<void>
-    ) => {
-      for (const uri of weightUris) {
-        try {
-          await withTimeout(
-            load(uri),
-            20_000,
-            t("monitor.crt.modelLoadTimeout")
-          );
-          console.info("[face-api] weights loaded from", uri);
-          return;
-        } catch (e) {
-          lastError = e;
-          console.warn("[face-api] failed to load weights from", uri, e);
-        }
-      }
-      throw lastError ?? new Error(t("monitor.crt.modelLoadFail"));
-    };
-
+    const slowTimer = window.setTimeout(() => setModelLoadSlow(true), 12_000);
     try {
       setDetectionStatus("loading");
-      const faceapi = await withTimeout(
-        import("face-api.js"),
-        15_000,
-        t("monitor.crt.modelLoadTimeout")
-      );
-      await loadFromFirstWorkingUri((uri) =>
-        faceapi.nets.tinyFaceDetector.loadFromUri(uri)
-      );
-      let recognitionOk = false;
-      try {
-        await loadFromFirstWorkingUri((uri) =>
-          faceapi.nets.faceLandmark68Net.loadFromUri(uri)
-        );
-        await loadFromFirstWorkingUri((uri) =>
-          faceapi.nets.faceRecognitionNet.loadFromUri(uri)
-        );
-        recognitionOk = true;
-      } catch (e) {
-        console.warn("[face-api] 识别模型未加载，回退为「任意人脸」模式", e);
-      }
+      setModelLoadSlow(false);
+      setModelLoadStage("import");
+      const { faceapi, recognitionReady } = await loadFaceApiRuntime((stage) => {
+        setModelLoadStage(stage);
+      });
       faceApiRef.current = faceapi;
-      recognitionReadyRef.current = recognitionOk;
-      setUseLegacyFaceCount(!recognitionOk);
+      recognitionReadyRef.current = recognitionReady;
+      setUseLegacyFaceCount(!recognitionReady);
       setModelLoaded(true);
-      setDetectionStatus(
-        recognitionOk ? "enrolling" : "detecting"
-      );
+      setDetectionStatus(recognitionReady ? "enrolling" : "detecting");
       return true;
     } catch (e) {
       console.error("[face-api] 模型加载失败:", e);
+      faceApiRef.current = null;
+      recognitionReadyRef.current = false;
+      setModelLoaded(false);
       setEnrollmentPhase("failed");
       setDetectionStatus("idle");
       onEnrollmentFailedRef.current?.(t("monitor.crt.modelLoadFail"));
       return false;
+    } finally {
+      window.clearTimeout(slowTimer);
+      setModelLoadStage(null);
+      setModelLoadSlow(false);
     }
   }, [t]);
+
+  const retryFaceModelLoad = useCallback(async () => {
+    resetFaceApiCache();
+    faceApiRef.current = null;
+    recognitionReadyRef.current = false;
+    setModelLoaded(false);
+    setEnrollmentPhase("pending");
+    const ok = await loadFaceApi();
+    if (ok) applyFaceModelReady();
+  }, [applyFaceModelReady, loadFaceApi]);
 
   const tryAddEnrollmentSample = useCallback((descriptor: Float32Array) => {
     enrollmentSamplesRef.current.push(descriptor);
@@ -733,17 +728,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       cameraActiveRef.current = true;
       setCameraActive(true);
       const ok = await loadFaceApi();
-      if (ok && recognitionReadyRef.current) {
-        enrollmentDeadlineRef.current = Date.now() + ENROLLMENT_TIMEOUT_MS;
-        enrollmentTimeoutFiredRef.current = false;
-        setEnrollmentTimeLeftSec(ENROLLMENT_TIMEOUT_SECONDS);
-        setEnrollmentPhase("enrolling");
-        setDetectionStatus("enrolling");
-      } else if (ok) {
-        setEnrollmentPhase("ready");
-        setDetectionStatus("detecting");
-        notifyEnrollmentReady();
-      }
+      if (ok) applyFaceModelReady();
     } catch (error) {
       alert(
         t("monitor.crt.cameraFailAlert", {
@@ -754,7 +739,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       setCameraActive(false);
       throw error;
     }
-  }, [isYuriOfficer, loadFaceApi, notifyEnrollmentReady, stopCamera]);
+  }, [applyFaceModelReady, isYuriOfficer, loadFaceApi, stopCamera]);
 
   useImperativeHandle(
     ref,
@@ -1130,8 +1115,27 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
               <p className="mt-2 text-sm sm:text-base text-stone-300 leading-relaxed">
                 {t("monitor.crt.cameraPlacementWhy")}
               </p>
-              <div className="mt-5 flex justify-center">
+              <p className="mt-3 text-sm font-mono text-cyan-200/90">
+                {modelLoadStage
+                  ? t(`monitor.crt.modelLoadStage_${modelLoadStage}`)
+                  : t("monitor.crt.statusLoading")}
+              </p>
+              {modelLoadSlow && (
+                <p className="mt-2 text-xs text-amber-200/90 leading-relaxed">
+                  {t("monitor.crt.modelLoadSlowHint")}
+                </p>
+              )}
+              <div className="mt-5 flex flex-col items-center gap-3">
                 <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-cyan-400 border-t-transparent" />
+                {modelLoadSlow && (
+                  <button
+                    type="button"
+                    onClick={() => void retryFaceModelLoad()}
+                    className="comic-border-2 border-cyan-400 bg-cyan-950/80 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-900/80 cursor-pointer"
+                  >
+                    {t("monitor.crt.modelLoadRetry")}
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     "@eazo/sdk",
     "@tensorflow-models/coco-ssd",
     "@tensorflow/tfjs",
+    "face-api.js",
   ],
   allowedDevOrigins: [
     "localhost",
@@ -36,6 +37,15 @@ const nextConfig: NextConfig = {
   ],
   async headers() {
     return [
+      {
+        source: "/models/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [

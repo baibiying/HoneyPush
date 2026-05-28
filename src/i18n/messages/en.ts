@@ -354,8 +354,7 @@ export const enMessages: Messages = {
       cameraPlacementBefore: "Frame your ",
       cameraPlacementHighlight: "face, hands, and desk",
       cameraPlacementAfter: "",
-      cameraPlacementWhy:
-        "So the officer can tell if you're working. Loading AI models…",
+      cameraPlacementWhy: "So the officer can tell if you're working.",
       cameraPlacementWhyShort: "So the officer can tell if you're working.",
       faceEnrollment: "Face enrollment",
       collectingProgress: "Progress {progress}%",
@@ -383,6 +382,13 @@ export const enMessages: Messages = {
       cameraFailUnknown: "Unknown error",
       modelLoadFail: "Face models failed to load — cannot enroll",
       modelLoadTimeout: "AI model load timed out — check your network and retry",
+      modelLoadStage_import: "Loading AI engine…",
+      modelLoadStage_backend: "Initializing compute backend…",
+      modelLoadStage_detector: "Loading face detector…",
+      modelLoadStage_landmarks: "Loading landmark model…",
+      modelLoadStage_recognition: "Loading recognition model (~6MB, first load may be slow)…",
+      modelLoadSlowHint: "Taking a while? Try another network or VPN, then tap Retry — we also fall back to a CDN.",
+      modelLoadRetry: "Retry loading AI models",
     },
     pose: {
       videoNotReady: "Camera not ready — please wait",
