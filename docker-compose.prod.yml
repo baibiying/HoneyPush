@@ -1,0 +1,42 @@
+# Production stack for China/HK VPS (no Vercel, no VPN required for users).
+# Usage:
+#   cp .env.example .env.production   # set LLM_API_KEY etc.
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   open http://YOUR_SERVER_IP:3000
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: honeypush-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: honeypush
+    volumes:
+      - honeypush_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d honeypush"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: honeypush-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/honeypush
+      NODE_ENV: production
+      # Set your public URL for metadata (optional)
+      # NEXT_PUBLIC_SITE_URL: https://your-domain.com
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  honeypush_pg_data:

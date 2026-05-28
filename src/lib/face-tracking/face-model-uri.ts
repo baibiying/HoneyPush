@@ -1,8 +1,8 @@
-/** face-api.js weights (same files as public/models). */
+/** Dev-only fallback when local weights are missing. */
 export const FACE_API_WEIGHTS_CDN =
   "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights";
 
-/** Prefer local weights first; CDN is only fallback. */
+/** Production uses same-origin /models only (no VPN-only CDNs). */
 export function getFaceApiWeightsUris(): string[] {
   const custom = process.env.NEXT_PUBLIC_FACE_API_WEIGHTS_URI?.trim();
   if (custom) return [custom];
@@ -11,7 +11,7 @@ export function getFaceApiWeightsUris(): string[] {
     return ["/models", FACE_API_WEIGHTS_CDN];
   }
 
-  return ["/models", FACE_API_WEIGHTS_CDN];
+  return ["/models"];
 }
 
 export function withTimeout<T>(

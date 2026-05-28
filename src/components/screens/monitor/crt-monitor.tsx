@@ -314,7 +314,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
         try {
           await withTimeout(
             load(uri),
-            45_000,
+            20_000,
             t("monitor.crt.modelLoadTimeout")
           );
           console.info("[face-api] weights loaded from", uri);
@@ -331,7 +331,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       setDetectionStatus("loading");
       const faceapi = await withTimeout(
         import("face-api.js"),
-        30_000,
+        15_000,
         t("monitor.crt.modelLoadTimeout")
       );
       await loadFromFirstWorkingUri((uri) =>

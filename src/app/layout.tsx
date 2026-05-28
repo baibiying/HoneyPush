@@ -9,10 +9,11 @@ import { GlobalSupervisionTakeover } from "@/components/layout/global-supervisio
 import { GlobalUpcomingTaskToasts } from "@/components/layout/global-upcoming-task-toasts";
 import { GameSfxProvider } from "@/components/layout/game-sfx-provider";
 import { MainContentShell } from "@/components/layout/main-content-shell";
+import { fontClassNames } from "@/app/fonts";
 
-const SITE_URL = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : undefined;
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 
 const APP_NAME = "HoneyPush 督蜜";
 const APP_DESCRIPTION =
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: APP_NAME,
   description: APP_DESCRIPTION,
-  icons: { icon: "https://eazo.ai/favicon.ico" },
+  icons: { icon: "/opengraph-image" },
   openGraph: {
     type: "website",
     siteName: "HoneyPush",
@@ -50,23 +51,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={cn("h-full antialiased")}>
-      <head>
-        {/* 引入 1950s 漫画字体 */}
-        <link
-          rel="preconnect"
-          href="https://fonts.googleapis.com"
-        />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Bangers&family=Outfit:wght@400;600;900&family=ZCOOL+KuaiLe&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="zh-CN" className={cn("h-full antialiased", fontClassNames)}>
+      <head />
       <body className="comic-bg-pattern min-h-svh flex flex-col">
         <I18nProvider>
           <GameSfxProvider>

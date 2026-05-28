@@ -55,9 +55,9 @@
   --color-accent-red:     #E11D48;
   --color-accent-orange:  #F97316;
   --color-coin-gold:      #D97706;
-  --font-bangers: 'Bangers', cursive, system-ui;
-  --font-comic:   'ZCOOL KuaiLe', 'Outfit', sans-serif;
-  --font-body:    'Outfit', 'ZCOOL KuaiLe', sans-serif;
+  --font-bangers: var(--font-bangers-next), cursive, system-ui;
+  --font-comic:   var(--font-zcool-next), var(--font-outfit-next), sans-serif;
+  --font-body:    var(--font-outfit-next), var(--font-zcool-next), sans-serif;
 }
 
 :root {
@@ -138,12 +138,12 @@
   body {
     background-color: #FAF4D3;
     color: #1C1917;
-    font-family: 'Outfit', 'ZCOOL KuaiLe', sans-serif;
+    font-family: var(--font-outfit-next), var(--font-zcool-next), sans-serif;
     min-height: 100svh;
     overflow-x: hidden;
   }
   html {
-    font-family: 'Outfit', 'ZCOOL KuaiLe', sans-serif;
+    font-family: var(--font-outfit-next), var(--font-zcool-next), sans-serif;
   }
 }
 
@@ -205,11 +205,11 @@
 
 /* ── Font utilities ── */
 .font-bangers {
-  font-family: 'Bangers', cursive, system-ui;
+  font-family: var(--font-bangers-next), cursive, system-ui;
   letter-spacing: 0.06em;
 }
 .font-comic {
-  font-family: 'ZCOOL KuaiLe', 'Outfit', sans-serif;
+  font-family: var(--font-zcool-next), var(--font-outfit-next), sans-serif;
 }
 
 /* ── Animations ── */

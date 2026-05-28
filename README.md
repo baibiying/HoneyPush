@@ -45,8 +45,22 @@ cp .env.example .env
 - [Eazo Documentation](https://docs.eazo.ai)
 - [Next.js Documentation](https://nextjs.org/docs)
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Vercel (overseas)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+vercel deploy --prod
+```
+
+Requires `DATABASE_URL` (Neon) in project settings.  
+**Note:** `*.vercel.app` may need VPN in mainland China.
+
+### Docker (recommended for China users)
+
+See [docs/DEPLOY-CHINA.md](docs/DEPLOY-CHINA.md) — self-host on a HK/CN VPS so users can open the app **without VPN**.
+
+```bash
+cp .env.production.example .env.production
+docker compose -f docker-compose.prod.yml up -d --build
+```
