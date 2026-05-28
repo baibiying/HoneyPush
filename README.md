@@ -56,7 +56,12 @@ vercel deploy --prod
 Requires `DATABASE_URL` (Neon) in project settings.  
 **Note:** `*.vercel.app` may need VPN in mainland China.
 
-### Zeabur (recommended if you have no server)
+### Railway (full-stack, trial credits)
+
+See [docs/DEPLOY-RAILWAY.md](docs/DEPLOY-RAILWAY.md) — GitHub + PostgreSQL plugin; uses `Dockerfile` in repo.  
+**Note:** Also overseas; may need VPN in China. Not permanently free after trial.
+
+### Zeabur (requires a server)
 
 See [docs/DEPLOY-ZEABUR.md](docs/DEPLOY-ZEABUR.md) — deploy from GitHub with managed PostgreSQL; usually works in China **without VPN**.
 

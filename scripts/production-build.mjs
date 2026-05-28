@@ -8,6 +8,7 @@ const isLocal = !url || /localhost|127\.0\.0\.1/.test(url);
 
 const isCloudDeploy =
   process.env.VERCEL === "1" ||
+  Boolean(process.env.RAILWAY_ENVIRONMENT) ||
   Boolean(process.env.ZEABUR_ENVIRONMENT_ID) ||
   Boolean(process.env.ZEABUR_SERVICE_ID);
 
@@ -16,7 +17,7 @@ if (isCloudDeploy && isLocal) {
     "❌ Production build: DATABASE_URL must be a cloud PostgreSQL URL.",
   );
   console.error(
-    "   Zeabur: add DATABASE_URL = ${POSTGRES_CONNECTION_STRING} in Variables.",
+    "   Add DATABASE_URL (Railway: reference Postgres; Zeabur: ${POSTGRES_CONNECTION_STRING}).",
   );
   process.exit(1);
 }
