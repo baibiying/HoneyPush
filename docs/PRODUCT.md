@@ -1,108 +1,141 @@
-# AI 智能监督网站 · 产品文档
+# HoneyPush · Product Document / 产品文档
 
-> 应用名称：**HoneyPush**
+> **HoneyPush** — AI scheduling + gamified video supervision / AI 智能排期 + 游戏化视频监督
 
-`HoneyPush` 是一款结合 AI 智能排期与游戏化视频监督的效率工具，致力于为学生和职场打工人解决「多线任务优先级混乱」与「执行期间沉迷手机」的痛点，帮助用户重塑时间感知与专注力。
+HoneyPush helps students and knowledge workers turn messy to-dos into focused execution: plan with AI, supervise with camera-based accountability, then review performance.
 
----
-
-## 一、背景
-
-在碎片化信息时代，用户的注意力被极度瓜分。现有的效率类工具往往存在两个极端：
-
-- **纯规划类**：依赖用户极高的自律性，只管记不管做，对于专注力和效率的提升收效甚微。
-- **纯限制类**：像番茄 Todo 软件的学霸模式，会强制锁机，用户无法在专注过程中打开相关的软件，但过于强制和反人性，容易引发用户的逆反心理，缺乏趣味性且没有相应的激励政策，用户会觉得难以坚持、容易被轻易卸载。
-
-市场缺乏一款能够「将混乱的任务理清」并「提供有趣、有陪伴感的强监督执行环境」的闭环产品。
+`HoneyPush` 致力于解决「多线任务优先级混乱」与「执行期间沉迷手机」，帮助用户重塑时间感知与专注力。
 
 ---
 
-## 二、为什么做
+## 1. Implemented features (current build) · 当前已实现功能
 
-- **弥合「规划」与「执行」的鸿沟**：很多时候人们拖延并非不想做，而是面对多线任务时产生的「启动瘫痪」。AI 能够大幅降低任务拆解和排序的门槛。
-- **情绪价值与正向反馈**：传统的专注模式过于枯燥。通过引入带有强烈人设的 AI 角色（如搞笑、毒舌、严厉）和真人监督，将反人性的专注转化为有互动的游戏化体验。
+**EN** — Shipped in code today (not roadmap):
 
----
+| Area | Details |
+|---|---|
+| Account & data | Email auth (`/api/auth/*`), task CRUD (`/api/tasks`), PostgreSQL |
+| AI | Natural-language parse (`/api/ai-parse-task`), AI schedule (`/api/ai-schedule`), rule fallback |
+| Supervision | Officer selection (Yuri), local `face-api.js` + `/models`, distraction alerts, 25/5 blocks |
+| Review | Outcome modal, `/api/performance`, `/api/stats`, map performance entry |
+| Platform | Daily digest cron, Eazo profile sync (`/api/user/profile`) |
+| Deploy | Production: **Vercel**; local DB: `docker-compose.yml` |
 
-## 三、用户定位
+**中文** — 以代码为准、已上线可用：
 
-| 层级 | 人群 |
-|------|------|
-| **核心用户** | 备考党（考研/考公/期末）、高校学生（面临论文和结课大作业） |
-| **次核心用户** | 互联网打工人、自由职业者、需要多线程处理并发任务的职场人 |
-
----
-
-## 四、解决的核心痛点
-
-1. **启动困难（不知道先做什么）**  
-   手头同时有论文 DDL、开题报告、复习任务，大脑因无法排序而宕机，干脆开始刷手机。
-
-2. **过程断触（执行时忍不住摸手机）**  
-   工作学习时，手机一亮就下意识拿起，主观上的「只看 5 分钟」往往演变成客观上的「浪费 2 小时」。
-
-3. **缺乏反馈（一个人坚持太难）**  
-   缺乏外部监督和陪伴，遇到困难容易中途放弃。
+- 邮箱注册 / 登录 / 登出 / 会话校验（`/api/auth/*`）
+- 任务 CRUD 与调度字段（`/api/tasks`、`/api/tasks/[id]`）
+- 自然语言任务解析、智能排期；LLM 不可用时规则兜底
+- 监督模式、Yuri 监督官、本地人脸检测、分心/离位判定、25/5 工作流
+- 专注结果、表现面板、冒险地图入口
+- 每日提醒 cron、Eazo 用户同步
+- 生产：**Vercel**；本地：**docker compose** PostgreSQL
 
 ---
 
-## 五、借用 AI 有什么优势
+## 2. Background · 背景
 
-| 技术 | 作用 |
-|------|------|
-| **NLP 自然语言处理** | 用户无需手动填写繁琐表单，像聊天一样输入计划，AI 即可提取 DDL、预估耗时，并自动生成结构化排期 |
-| **CV 计算机视觉** | AI 视频监督模式下，通过摄像头（需授权）实时捕捉「低头/玩手机/离开座位」，触发 AI 角色即时反馈，实现「无人值守但强监督」 |
-| **大模型角色扮演（LLM Persona）** | 赋予 AI 监督员灵魂、记忆和情绪，根据专注表现生成差异化对话和惩罚机制 |
+**EN** — Productivity tools often split into passive planners (no execution help) and harsh lock-down apps (hard to sustain). HoneyPush closes the loop: **AI planning → supervised execution → feedback**.
+
+**中文** — 纯规划类工具依赖极高自律；纯限制类（如强制锁机）易引发逆反。市场需要「理清任务 + 有趣、有陪伴感的强监督执行」闭环。
 
 ---
 
-## 六、核心功能模块详述
+## 3. Why we build · 为什么做
 
-### 1. 智能排期引擎（AI 四象限调度系统）
+**EN**
 
-- **极简输入**：支持语音/文字倾诉（例：「我周五前要交交互设计稿，明天得写完 3000 字论文，另外今天还得买个猫粮」）。
-- **AI 解析与分发**：
-  - 自动识别任务、DDL 和预估时长。
-  - 根据艾森豪威尔矩阵（四象限法）自动归类：紧急且重要、重要不紧急、紧急不重要、不紧急不重要。
-- **阶段工作流**：将全天划分为多个 Block（时间块；每个时间块参考番茄钟：专注 25 分钟 + 休息 5 分钟）。用户可在 AI 规划基础上自主编辑。
+- Bridge planning and execution; AI lowers the cost of breaking down and ordering tasks.
+- Add emotional feedback via officer personas and gamification so focus feels less lonely.
 
----
+**中文**
 
-### 2. 沉浸监督局（核心差异化功能）
-
-用户选择当前要执行的任务后，进入视频监督模式（PC/Pad 体验最佳，手机可作为辅助机位）。
-
-#### A. 真人同频局
-
-- 类似线上自习室；可加入「考研上岸局」「打工人摸鱼挨打局」等。
-- 支持开启摄像头（可选模糊背景），互相监督，利用同伴压力促成专注。
-- 可付费进行一对一真人监督。
-
-#### B. AI 角色监督局
-
-- 开启摄像头并调用 AI 视觉动作识别（**本地运算**，保证隐私）。
-- 检测到拿起手机或离开屏幕超过 15 秒，触发角色专属互动。
-
-**AI 角色卡片**（可加入抽卡/解锁机制，用专注币解锁更多角色）：
-
-| 角色 | 性格 | 典型反馈 |
-|------|------|----------|
-| **苏联 AI 军官 · 尤里** | 铁血、暴躁、黑色幽默 | 识别到玩手机时屏幕闪红光、警报。「同志！西伯利亚的土豆正在召唤你！放下那个发光的方块，否则我将对你的摸鱼行为进行物理消灭！」 |
-| **毒舌前任/老板娘 · 顾姐** | 阴阳怪气、恨铁不成钢 | 「哟，又在看手机呢？难怪你那个 DDL 要拖到下辈子，继续玩呗，反正急的又不是我。」 |
-| **温柔学长 · 林风** | 鼓励式教育、正向强化 | 轻柔白噪音；走神时温和提醒：「累了吗？喝口水休息 5 分钟吧，剩下的我们一起完成。」 |
+- **弥合规划与执行**：降低「启动瘫痪」门槛。
+- **情绪价值**：AI 角色（毒舌、严厉、温柔等）与游戏化，让专注更可坚持。
 
 ---
 
-### 3. 数据复盘与时光胶囊
+## 4. Target users · 用户定位
 
-- **多维数据报告**：专注时长热力图、手机拿取次数折线图、被打断频率。
-- **任务 ROI 分析**：对比「AI 预估时长」与「实际消耗时长」。
-- **高光/处刑时刻导出**：截取「最专注瞬间」或「被苏联军官痛骂的搞笑瞬间」，一键分享至小红书/朋友圈（PLG 增长）。
+| EN | 中文 |
+|---|---|
+| **Core:** exam prep, university coursework | **核心：** 备考党、高校学生（论文/期末） |
+| **Secondary:** office workers, freelancers, multi-task pros | **次核心：** 打工人、自由职业、多线程职场人 |
 
 ---
 
-### 4. 个人档案局
+## 5. Key pain points · 核心痛点
 
-- **专注等级与成就**：专注时长转化为「专注币」，用于商店解锁 AI 角色卡片或白噪音 BGM。
-- **我的数字工牌**：四象限偏好、最常用 AI 监督员、累计干掉的「拖延怪物」数量。
-- **隐私与设置**：严格摄像头权限声明（画面不上传云端，仅本地轮廓分析）。
+**EN**
+
+1. Start paralysis — too many tasks, no clear first step  
+2. Interruptions — phone pulls attention during work  
+3. No accountability — hard to persist alone  
+
+**中文**
+
+1. **启动困难** — 多线任务无法排序，干脆刷手机  
+2. **过程断触** — 「只看 5 分钟」变成浪费数小时  
+3. **缺乏反馈** — 缺少外部监督，容易中途放弃  
+
+---
+
+## 6. How AI helps · 借用 AI 的优势
+
+| EN | 中文 |
+|---|---|
+| **NLP / LLM** — chat-style input → tasks, DDL, schedule | **NLP** — 聊天式输入，提取 DDL、耗时、排期 |
+| **CV** — local webcam checks for distraction (privacy-first) | **CV** — 摄像头本地检测低头/玩手机/离座 |
+| **Persona** — officer reactions tied to focus behavior | **LLM Persona** — 监督员人设与差异化反馈 |
+
+---
+
+## 7. Core modules · 核心功能模块
+
+### 7.1 Smart scheduling · 智能排期引擎
+
+**EN** — Natural-language (or manual) task intake; AI extracts deadline, duration, Eisenhower quadrant; maps tasks into availability with pomodoro-style blocks (25 min focus + 5 min break); user can edit the calendar.
+
+**中文** — 支持自然语言/文字输入；自动识别任务、DDL、时长与四象限（紧急重要 / 重要不紧急 / 紧急不重要 / 不重要不紧急）；按可用时间切块，用户可再编辑。
+
+### 7.2 Immersive supervision · 沉浸监督局
+
+**EN (shipped)** — User picks a task → supervision overlay → camera enrollment → focus blocks; local CV triggers officer video/audio; strikes can fail a block; focus coins & stats update.
+
+**EN (roadmap)** — Live co-study rooms, 1:1 human supervision (not in current build).
+
+**中文（已上线）** — 选任务进入监督；本地 AI 视觉；摸鱼触发角色互动（如尤里）；PC/Pad 体验最佳。
+
+**中文（规划）** — 真人同频自习室、付费一对一监督等。
+
+**Officer personas / AI 角色（规划扩展）**
+
+| Role / 角色 | Vibe / 性格 | Example / 典型反馈 |
+|---|---|---|
+| Yuri / 尤里 | Strict, dark humor / 铁血幽默 | Red alert when phone detected / 玩手机红光警报 |
+| Sister Gu / 顾姐 | Sarcastic / 毒舌 | 「DDL 拖到下辈子」式吐槽 |
+| Lin Feng / 林风 | Gentle coach / 温柔学长 | 鼓励式提醒与休息建议 |
+
+### 7.3 Review & growth · 数据复盘
+
+**EN (shipped)** — Performance APIs, focus history, completion trends on the adventure map.
+
+**EN (roadmap)** — Heatmaps, phone-pickup charts, ROI vs AI estimates, highlight clips for social share.
+
+**中文（已上线）** — 表现面板、专注与任务统计。
+
+**中文（规划）** — 热力图、摸鱼折线、预估 vs 实际 ROI、高光/处刑片段导出分享。
+
+### 7.4 Profile & rewards · 个人档案局
+
+**EN** — Focus coins from completed blocks; officer preferences; privacy: CV runs locally, frames not sent to cloud vision APIs.
+
+**中文** — 专注币、数字工牌式偏好统计；摄像头画面本地分析，不上传云端做轮廓识别以外的用途。
+
+---
+
+## 8. Injective (roadmap) · Injective（规划）
+
+**EN** — Not integrated today. Future: tokenize focus coins on Injective; wallet claim; streak and leaderboard settlement.
+
+**中文** — 当前未集成。未来可将专注币上链，配合钱包领取与成就结算。
