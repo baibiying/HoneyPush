@@ -373,6 +373,7 @@ export const zhMessages = {
       cameraFailAlert: "摄像头启动失败：{message}",
       cameraFailUnknown: "未知错误",
       modelLoadFail: "AI 人脸模型加载失败，无法采集",
+      modelLoadTimeout: "AI 模型加载超时，请检查网络后重试",
     },
     pose: {
       videoNotReady: "摄像头画面未就绪，请稍候",

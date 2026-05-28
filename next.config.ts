@@ -53,7 +53,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https:",
               "media-src 'self' blob: http://124.221.38.152:8080",
               "frame-src https://player.bilibili.com",
-              "connect-src 'self' https: wss:",
+              "connect-src 'self' https: wss: https://cdn.jsdelivr.net",
               "worker-src 'self' blob:",
             ].join("; "),
           },

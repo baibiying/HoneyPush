@@ -72,6 +72,10 @@ import {
   translateDistractionOrHint,
   translatePoseHint,
 } from "@/lib/monitor-i18n";
+import {
+  getFaceApiWeightsUris,
+  withTimeout,
+} from "@/lib/face-tracking/face-model-uri";
 
 export type CrtMonitorHandle = {
   startCamera: () => Promise<void>;
@@ -300,14 +304,47 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
   const loadFaceApi = useCallback(async () => {
     if (faceApiRef.current) return true;
+    const weightUris = getFaceApiWeightsUris();
+    let lastError: unknown;
+
+    const loadFromFirstWorkingUri = async (
+      load: (uri: string) => Promise<void>
+    ) => {
+      for (const uri of weightUris) {
+        try {
+          await withTimeout(
+            load(uri),
+            45_000,
+            t("monitor.crt.modelLoadTimeout")
+          );
+          console.info("[face-api] weights loaded from", uri);
+          return;
+        } catch (e) {
+          lastError = e;
+          console.warn("[face-api] failed to load weights from", uri, e);
+        }
+      }
+      throw lastError ?? new Error(t("monitor.crt.modelLoadFail"));
+    };
+
     try {
       setDetectionStatus("loading");
-      const faceapi = await import("face-api.js");
-      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+      const faceapi = await withTimeout(
+        import("face-api.js"),
+        30_000,
+        t("monitor.crt.modelLoadTimeout")
+      );
+      await loadFromFirstWorkingUri((uri) =>
+        faceapi.nets.tinyFaceDetector.loadFromUri(uri)
+      );
       let recognitionOk = false;
       try {
-        await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
-        await faceapi.nets.faceRecognitionNet.loadFromUri("/models");
+        await loadFromFirstWorkingUri((uri) =>
+          faceapi.nets.faceLandmark68Net.loadFromUri(uri)
+        );
+        await loadFromFirstWorkingUri((uri) =>
+          faceapi.nets.faceRecognitionNet.loadFromUri(uri)
+        );
         recognitionOk = true;
       } catch (e) {
         console.warn("[face-api] 识别模型未加载，回退为「任意人脸」模式", e);
@@ -316,14 +353,18 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       recognitionReadyRef.current = recognitionOk;
       setUseLegacyFaceCount(!recognitionOk);
       setModelLoaded(true);
+      setDetectionStatus(
+        recognitionOk ? "enrolling" : "detecting"
+      );
       return true;
     } catch (e) {
       console.error("[face-api] 模型加载失败:", e);
       setEnrollmentPhase("failed");
+      setDetectionStatus("idle");
       onEnrollmentFailedRef.current?.(t("monitor.crt.modelLoadFail"));
       return false;
     }
-  }, []);
+  }, [t]);
 
   const tryAddEnrollmentSample = useCallback((descriptor: Float32Array) => {
     enrollmentSamplesRef.current.push(descriptor);

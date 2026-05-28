@@ -382,6 +382,7 @@ export const enMessages: Messages = {
       cameraFailAlert: "Camera failed: {message}",
       cameraFailUnknown: "Unknown error",
       modelLoadFail: "Face models failed to load — cannot enroll",
+      modelLoadTimeout: "AI model load timed out — check your network and retry",
     },
     pose: {
       videoNotReady: "Camera not ready — please wait",
