@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { OFFICER_CLIP_MAX_DURATION_SEC } from "@/lib/officers-data";
-import { unlockBrowserAudio } from "@/lib/unlock-browser-audio";
+import { playVideoRobust } from "@/lib/media-playback";
 
 type OfficerClipVideoProps = {
   src: string;
@@ -41,6 +41,8 @@ export function OfficerClipVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [clipProgress, setClipProgress] = useState(0);
+  const [needsTapPlay, setNeedsTapPlay] = useState(false);
+  const [buffering, setBuffering] = useState(false);
 
   const clipDurationSec = useMemo(() => {
     if (durationSec == null || durationSec <= 0) return null;
@@ -81,14 +83,14 @@ export function OfficerClipVideo({
   }, [startSec]);
 
   const playWithSound = useCallback(async (el: HTMLVideoElement) => {
-    el.muted = false;
-    el.volume = 1;
-    await unlockBrowserAudio();
-    try {
-      await el.play();
-    } catch {
-      /* 浏览器可能仍阻止带声自动播放，需用户点击播放 */
+    const result = await playVideoRobust(el);
+    if (result === "failed") {
+      setNeedsTapPlay(true);
+      setBuffering(false);
+      return;
     }
+    setNeedsTapPlay(false);
+    setBuffering(false);
   }, []);
 
   const handlePlay = useCallback(() => {
@@ -134,13 +136,23 @@ export function OfficerClipVideo({
     if (!autoPlay) return;
     const el = videoRef.current;
     if (!el) return;
+    setBuffering(true);
+    setNeedsTapPlay(false);
     seekToStart();
     const tryPlay = () => void playWithSound(el);
     void tryPlay();
+    const slowTimer = window.setTimeout(() => {
+      if (el.paused && el.currentTime < 0.05) setNeedsTapPlay(true);
+      setBuffering(false);
+    }, 12_000);
     if (el.readyState < 2) {
       el.addEventListener("loadeddata", tryPlay, { once: true });
-      return () => el.removeEventListener("loadeddata", tryPlay);
+      return () => {
+        el.removeEventListener("loadeddata", tryPlay);
+        window.clearTimeout(slowTimer);
+      };
     }
+    return () => window.clearTimeout(slowTimer);
   }, [autoPlay, playWithSound, seekToStart, src]);
 
   useEffect(() => {
@@ -172,8 +184,31 @@ export function OfficerClipVideo({
         onSeeked={handleSeeking}
         onPlay={handlePlayEvent}
         onPause={handlePauseEvent}
+        onWaiting={() => setBuffering(true)}
+        onPlaying={() => setBuffering(false)}
         onError={onError}
       />
+
+      {autoPlay && !isClipped && (buffering || needsTapPlay) && (
+        <div className="absolute inset-0 z-[15] flex flex-col items-center justify-center gap-2 bg-black/55 pointer-events-auto">
+          {buffering && !needsTapPlay ? (
+            <p className="font-comic text-sm text-amber-100/90 animate-pulse">加载中…</p>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const el = videoRef.current;
+                if (el) void playWithSound(el);
+              }}
+              className="comic-border-2 border-amber-400 bg-amber-950/90 px-4 py-2 text-sm font-bold text-amber-100 flex items-center gap-2 cursor-pointer"
+            >
+              <Play className="h-4 w-4 fill-current" aria-hidden />
+              点击播放
+            </button>
+          )}
+        </div>
+      )}
 
       {isClipped && clipDurationSec != null && showClipControls && (
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent px-3 pb-2 pt-8">

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { unlockBrowserAudio } from "@/lib/unlock-browser-audio";
+import { Play } from "lucide-react";
+import { useI18n } from "@/i18n/i18n-provider";
+import { playVideoRobust, preloadVideoAsset } from "@/lib/media-playback";
 import {
   YURI_PATROL_CYCLE,
   YURI_SUPERVISION_VIDEOS,
@@ -31,20 +33,6 @@ type YuriOfficerVideoProps = {
 
 type PlaybackPhase = "waiting" | "intro" | "patrol" | "alert";
 
-async function playVideoElement(el: HTMLVideoElement): Promise<boolean> {
-  await unlockBrowserAudio();
-  el.muted = false;
-  el.volume = 1;
-
-  try {
-    await el.play();
-    return true;
-  } catch (err) {
-    console.warn("[yuri-video] unmuted autoplay failed:", err);
-    return false;
-  }
-}
-
 export function YuriOfficerVideo({
   enrollmentReady,
   isDistracted,
@@ -57,10 +45,14 @@ export function YuriOfficerVideo({
   onDistractionBannerChange,
   onAlertPhaseEnd,
 }: YuriOfficerVideoProps) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<PlaybackPhase>("waiting");
   const [patrolIndex, setPatrolIndex] = useState(0);
   const [src, setSrc] = useState<string | null>(null);
+  const [buffering, setBuffering] = useState(false);
+  const [needsTapPlay, setNeedsTapPlay] = useState(false);
+  const [needsUnmute, setNeedsUnmute] = useState(false);
   const introStartedRef = useRef(false);
   const wasDistractedRef = useRef(false);
   const lastAlertStrikeRef = useRef(0);
@@ -70,13 +62,44 @@ export function YuriOfficerVideo({
   phaseRef.current = phase;
   patrolIndexRef.current = patrolIndex;
 
+  useEffect(() => {
+    preloadVideoAsset(YURI_SUPERVISION_VIDEOS.intro);
+    preloadVideoAsset(YURI_SUPERVISION_VIDEOS.idle);
+    for (const url of YURI_PATROL_CYCLE) {
+      preloadVideoAsset(url);
+    }
+  }, []);
+
   const playSrc = useCallback(
     (nextSrc: string) => {
+      setNeedsTapPlay(false);
+      setNeedsUnmute(false);
+      setBuffering(true);
       setSrc((prev) => (prev === nextSrc ? prev : nextSrc));
       onActiveClipChange?.(yuriClipFromSrc(nextSrc));
     },
     [onActiveClipChange]
   );
+
+  const attemptPlay = useCallback(async () => {
+    const el = videoRef.current;
+    if (!el || !src) return;
+    const result = await playVideoRobust(el);
+    if (result === "unmuted") {
+      setNeedsTapPlay(false);
+      setNeedsUnmute(false);
+      setBuffering(false);
+      return;
+    }
+    if (result === "muted") {
+      setNeedsTapPlay(false);
+      setNeedsUnmute(true);
+      setBuffering(false);
+      return;
+    }
+    setNeedsTapPlay(true);
+    setBuffering(false);
+  }, [src]);
 
   /** 劳动态：从 idle 开始按固定顺序循环 */
   const startPatrolCycle = useCallback(() => {
@@ -119,27 +142,53 @@ export function YuriOfficerVideo({
 
     let cancelled = false;
 
-    const start = () => {
+    const onCanPlay = () => {
       if (cancelled) return;
-      void playVideoElement(el);
+      void attemptPlay();
     };
 
-    el.addEventListener("canplay", start);
+    const onWaiting = () => {
+      if (!cancelled) setBuffering(true);
+    };
+
+    const onPlaying = () => {
+      if (!cancelled) setBuffering(false);
+    };
+
+    el.addEventListener("canplay", onCanPlay);
+    el.addEventListener("waiting", onWaiting);
+    el.addEventListener("playing", onPlaying);
+
+    try {
+      el.load();
+    } catch {
+      /* ignore */
+    }
+
     if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      start();
+      void attemptPlay();
     }
 
     const retryTimer = window.setTimeout(() => {
       if (cancelled || !el.paused || el.currentTime > 0.05) return;
-      start();
-    }, 600);
+      void attemptPlay();
+    }, 800);
+
+    const slowTimer = window.setTimeout(() => {
+      if (cancelled || !el.paused || el.currentTime > 0.05) return;
+      setNeedsTapPlay(true);
+      setBuffering(false);
+    }, 12_000);
 
     return () => {
       cancelled = true;
-      el.removeEventListener("canplay", start);
+      el.removeEventListener("canplay", onCanPlay);
+      el.removeEventListener("waiting", onWaiting);
+      el.removeEventListener("playing", onPlaying);
       window.clearTimeout(retryTimer);
+      window.clearTimeout(slowTimer);
     };
-  }, [src]);
+  }, [src, attemptPlay]);
 
   useEffect(() => {
     if (!enrollmentReady || introStartedRef.current) return;
@@ -208,22 +257,91 @@ export function YuriOfficerVideo({
       setPatrolIndex(0);
       patrolIndexRef.current = 0;
       setSrc(null);
+      setBuffering(false);
+      setNeedsTapPlay(false);
+      setNeedsUnmute(false);
       onActiveClipChange?.("none");
       onDistractionBannerChange?.(false);
     }
   }, [enrollmentReady, onActiveClipChange, onDistractionBannerChange]);
 
+  const handleManualPlay = useCallback(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    void (async () => {
+      const result = await playVideoRobust(el, { allowMutedFallback: false });
+      if (result === "unmuted") {
+        setNeedsTapPlay(false);
+        setNeedsUnmute(false);
+        return;
+      }
+      const mutedResult = await playVideoRobust(el);
+      if (mutedResult !== "failed") {
+        setNeedsTapPlay(false);
+        setNeedsUnmute(mutedResult === "muted");
+      }
+    })();
+  }, []);
+
+  const handleUnmute = useCallback(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = false;
+    el.volume = 1;
+    void playVideoRobust(el, { allowMutedFallback: false }).then((result) => {
+      if (result === "unmuted") setNeedsUnmute(false);
+    });
+  }, []);
+
+  const showOverlay = Boolean(src) && (buffering || needsTapPlay || needsUnmute);
+
   return (
-    <video
-      ref={videoRef}
-      className={className}
-      src={src ?? undefined}
-      playsInline
-      autoPlay
-      muted={false}
-      preload="auto"
-      onEnded={handleEnded}
-      onError={onVideoError}
-    />
+    <div className="relative h-full w-full min-h-0">
+      <video
+        ref={videoRef}
+        className={className}
+        src={src ?? undefined}
+        playsInline
+        autoPlay
+        muted={false}
+        preload="auto"
+        onEnded={handleEnded}
+        onError={onVideoError}
+      />
+
+      {showOverlay && (
+        <div className="absolute inset-0 z-[15] flex flex-col items-center justify-center gap-3 bg-black/55 px-4 text-center pointer-events-auto">
+          {buffering && !needsTapPlay && (
+            <p className="font-comic text-sm sm:text-base text-amber-100/95 animate-pulse">
+              {t("monitor.video.loading")}
+            </p>
+          )}
+          {needsTapPlay && (
+            <>
+              <p className="font-comic text-sm sm:text-base text-amber-100/90 max-w-xs">
+                {t("monitor.video.tapToPlayHint")}
+              </p>
+              <button
+                type="button"
+                onClick={handleManualPlay}
+                className="comic-border-2 border-amber-400 bg-amber-950/90 px-4 py-2.5 text-sm font-bold text-amber-100 hover:bg-amber-900 flex items-center gap-2 cursor-pointer"
+              >
+                <Play className="h-4 w-4 fill-current" aria-hidden />
+                {t("monitor.video.tapToPlay")}
+              </button>
+            </>
+          )}
+          {needsUnmute && !needsTapPlay && (
+            <button
+              type="button"
+              onClick={handleUnmute}
+              className="comic-border-2 border-cyan-400 bg-cyan-950/90 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-900 cursor-pointer"
+            >
+              {t("monitor.video.tapForSound")}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -323,6 +323,12 @@ export const zhMessages = {
       blockTotal: "本段 {time}",
       ariaRemaining: "本段专注剩余 {time}",
     },
+    video: {
+      loading: "监督官视频加载中…",
+      tapToPlayHint: "浏览器阻止了自动播放，请点击下方按钮开始播放",
+      tapToPlay: "播放监督视频",
+      tapForSound: "点击开启声音",
+    },
     officerModal: {
       title: "选择监督官",
       subtitle: "尚未在排期地图选定监督官；选择后将自动开启摄像头监督",

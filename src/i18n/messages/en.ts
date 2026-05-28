@@ -329,6 +329,12 @@ export const enMessages: Messages = {
       blockTotal: "Block {time}",
       ariaRemaining: "{time} left in this block",
     },
+    video: {
+      loading: "Loading officer video…",
+      tapToPlayHint: "Autoplay was blocked — tap below to start",
+      tapToPlay: "Play supervision video",
+      tapForSound: "Tap for sound",
+    },
     officerModal: {
       title: "Choose your officer",
       subtitle: "No default officer on the map yet — pick one to start camera supervision",

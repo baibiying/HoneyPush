@@ -18,6 +18,7 @@ import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-vid
 import { YuriOfficerVideo } from "@/components/screens/monitor/yuri-officer-video";
 import { SupervisionFocusTimer } from "@/components/screens/monitor/supervision-focus-timer";
 import { YuriStrikeStars } from "@/components/screens/monitor/yuri-strike-stars";
+import { preloadVideoAsset } from "@/lib/media-playback";
 import {
   primeUnmutedVideoPlayback,
   unlockBrowserAudio,
@@ -705,6 +706,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     if (cameraActiveRef.current) return;
     if (isYuriOfficer) {
       primeUnmutedVideoPlayback(YURI_SUPERVISION_VIDEOS.intro);
+      preloadVideoAsset(YURI_SUPERVISION_VIDEOS.idle);
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({

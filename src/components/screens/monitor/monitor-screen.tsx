@@ -52,6 +52,7 @@ import {
   exitSupervisionFullscreen,
   requestSupervisionFullscreen,
 } from "@/lib/supervision-fullscreen";
+import { preloadVideoAsset } from "@/lib/media-playback";
 import { primeUnmutedVideoPlayback } from "@/lib/unlock-browser-audio";
 import { YURI_SUPERVISION_VIDEOS } from "@/lib/officers/yuri-supervision-videos";
 import { useI18n } from "@/i18n/i18n-provider";
@@ -288,6 +289,7 @@ export function MonitorScreen() {
     (officerId: OfficerId, task: { id: number; text: string }) => {
       if (officerId === "yuri") {
         primeUnmutedVideoPlayback(YURI_SUPERVISION_VIDEOS.intro);
+        preloadVideoAsset(YURI_SUPERVISION_VIDEOS.idle);
       }
       setCurrentOfficerId(officerId);
       setShowOfficerModal(false);
