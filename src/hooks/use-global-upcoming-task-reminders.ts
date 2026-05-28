@@ -82,9 +82,11 @@ export function useGlobalUpcomingTaskReminders({
       void syncTasks();
     };
     window.addEventListener(TASKS_CHANGED_EVENT, refresh);
+    window.addEventListener("online", refresh);
     return () => {
       cancelled = true;
       window.removeEventListener(TASKS_CHANGED_EVENT, refresh);
+      window.removeEventListener("online", refresh);
     };
   }, [enabled]);
 

@@ -42,10 +42,12 @@ export function usePlayerStats() {
     const refresh = () => void syncStats();
     window.addEventListener(STATS_CHANGED_EVENT, refresh);
     window.addEventListener(AUTH_CHANGED_EVENT, refresh);
+    window.addEventListener("online", refresh);
     return () => {
       cancelled = true;
       window.removeEventListener(STATS_CHANGED_EVENT, refresh);
       window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+      window.removeEventListener("online", refresh);
     };
   }, [user]);
 

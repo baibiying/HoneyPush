@@ -81,10 +81,12 @@ export function usePerformanceReport(options: UsePerformanceReportOptions = {}) 
     window.addEventListener(STATS_CHANGED_EVENT, refresh);
     window.addEventListener(TASKS_CHANGED_EVENT, refresh);
     window.addEventListener(AUTH_CHANGED_EVENT, refresh);
+    window.addEventListener("online", refresh);
     return () => {
       window.removeEventListener(STATS_CHANGED_EVENT, refresh);
       window.removeEventListener(TASKS_CHANGED_EVENT, refresh);
       window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+      window.removeEventListener("online", refresh);
     };
   }, [user, load]);
 
