@@ -56,9 +56,18 @@ vercel deploy --prod
 Requires `DATABASE_URL` (Neon) in project settings.  
 **Note:** `*.vercel.app` may need VPN in mainland China.
 
-### Docker (recommended for China users)
+### Zeabur (recommended if you have no server)
 
-See [docs/DEPLOY-CHINA.md](docs/DEPLOY-CHINA.md) — self-host on a HK/CN VPS so users can open the app **without VPN**.
+See [docs/DEPLOY-ZEABUR.md](docs/DEPLOY-ZEABUR.md) — deploy from GitHub with managed PostgreSQL; usually works in China **without VPN**.
+
+Key env vars on the app service:
+
+- `DATABASE_URL` = `${POSTGRES_CONNECTION_STRING}`
+- `NEXT_PUBLIC_SITE_URL` = `${ZEABUR_WEB_URL}`
+
+### Docker (own VPS)
+
+See [docs/DEPLOY-CHINA.md](docs/DEPLOY-CHINA.md) — self-host on a HK/CN VPS.
 
 ```bash
 cp .env.production.example .env.production

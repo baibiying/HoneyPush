@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel:build": "bun scripts/vercel-build.mjs",
+    "build:deploy": "bun scripts/production-build.mjs",
+    "vercel:build": "bun run build:deploy",
     "start": "next start",
     "lint": "eslint",
     "cleanup:demo": "bun scripts/cleanup-demo.ts",

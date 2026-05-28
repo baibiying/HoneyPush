@@ -1,0 +1,4 @@
+{
+  "build_command": "bun run build:deploy",
+  "start_command": "bun run start"
+}
