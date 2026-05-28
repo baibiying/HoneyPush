@@ -1,3 +1,8 @@
+import {
+  isDatabaseUrlConfiguredForProduction,
+  isProductionRuntime,
+} from "@/lib/db/connection-url";
+
 export function isDatabaseUnavailableError(error: unknown) {
   if (!error || typeof error !== "object") return false;
 
@@ -16,6 +21,14 @@ export function isDatabaseUnavailableError(error: unknown) {
 }
 
 export function databaseUnavailableResponse() {
+  if (isProductionRuntime() && !isDatabaseUrlConfiguredForProduction()) {
+    return {
+      error:
+        "生产环境未配置数据库。请在 Vercel 项目 Storage 中添加 Neon Postgres（会自动注入连接串），或在 Environment Variables 中设置 DATABASE_URL，然后重新部署。",
+      code: "DATABASE_UNAVAILABLE",
+    };
+  }
+
   return {
     error:
       "数据库未连接。请先启动 PostgreSQL（例如运行 docker compose up -d），再执行 npm run db:migrate。",

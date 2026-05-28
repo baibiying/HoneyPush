@@ -108,10 +108,14 @@ export function TaskAddPanel({
     setParsing(true);
     setParseSource(null);
     try {
-      const res = await request("/api/tasks/parse", {
+      const res = await request("/api/ai-parse-task", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input, tzOffset }),
+        body: JSON.stringify({
+          naturalLanguage: input,
+          timezoneOffsetMinutes: tzOffset,
+          referenceLocal: new Date().toISOString(),
+        }),
       });
       if (!res.ok) {
         throw new Error(await readApiError(res));

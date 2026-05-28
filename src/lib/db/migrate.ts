@@ -3,14 +3,12 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import path from "path";
 import postgres from "postgres";
+import { resolveDatabaseUrl } from "@/lib/db/connection-url";
 
 config({ path: ".env" });
 
 const runMigrate = async () => {
-  const client = postgres(
-    process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/myapp",
-    { max: 1 }
-  );
+  const client = postgres(resolveDatabaseUrl(), { max: 1 });
   const db = drizzle(client);
 
   console.log("⏳ Running migrations...");
