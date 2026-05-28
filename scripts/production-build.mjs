@@ -6,18 +6,14 @@ const url =
   "";
 const isLocal = !url || /localhost|127\.0\.0\.1/.test(url);
 
-const isCloudDeploy =
-  process.env.VERCEL === "1" ||
-  Boolean(process.env.RAILWAY_ENVIRONMENT) ||
-  Boolean(process.env.ZEABUR_ENVIRONMENT_ID) ||
-  Boolean(process.env.ZEABUR_SERVICE_ID);
+const isVercel = process.env.VERCEL === "1";
 
-if (isCloudDeploy && isLocal) {
+if (isVercel && isLocal) {
   console.error(
     "❌ Production build: DATABASE_URL must be a cloud PostgreSQL URL.",
   );
   console.error(
-    "   Add DATABASE_URL (Railway: reference Postgres; Zeabur: ${POSTGRES_CONNECTION_STRING}).",
+    "   Add DATABASE_URL in Vercel project settings (e.g. Neon integration).",
   );
   process.exit(1);
 }

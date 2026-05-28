@@ -390,10 +390,6 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     if (framingBadSinceRef.current != null) {
       framingSec = (now - framingBadSinceRef.current) / 1000;
     }
-    let phoneSec = 0;
-    if (phoneSinceRef.current != null) {
-      phoneSec = (now - phoneSinceRef.current) / 1000;
-    }
     if (framingSec >= FRAMING_L3_LONG_SEC || framingSec >= FRAMING_L3_SEC) return 3;
     if (framingSec >= FRAMING_L2_SEC) return 2;
     if (phoneSinceRef.current != null) return 2;

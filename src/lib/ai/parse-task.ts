@@ -129,7 +129,7 @@ function deadlineFromPhrase(
   const parts = localParts(now, timezoneOffsetMinutes);
   let dayOffset = 0;
   let hour = 18;
-  let minute = 0;
+  const minute = 0;
 
   if (/今晚|今天晚上/.test(p)) {
     dayOffset = 0;

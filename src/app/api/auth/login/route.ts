@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { databaseUnavailableResponse, isDatabaseUnavailableError } from "@/lib/db/errors";
 import { verifyPassword } from "@/lib/auth/password";
 import {
   applySessionCookie,

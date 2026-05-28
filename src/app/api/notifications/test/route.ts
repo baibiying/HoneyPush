@@ -3,8 +3,7 @@ import { notifications, EazoNotificationPublishError } from "@eazo/sdk/server";
 import { requireAuth } from "@/lib/auth";
 
 /**
- * Sends a test push to every subscriber of this app. The template ships a
- * static message so the route works immediately after `bun run cleanup:demo`.
+ * Sends a test push to every subscriber of this app.
  * Customize `title` / `body` / `data` for your product.
  */
 export async function POST(request: NextRequest) {

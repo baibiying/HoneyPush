@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { memory } from "@eazo/sdk";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -117,7 +117,6 @@ function playChime() {
 }
 
 export function ScheduleScreen() {
-  const router = useRouter();
   const { t } = useI18n();
 
   const readApiError = useCallback(async (res: Response) => {

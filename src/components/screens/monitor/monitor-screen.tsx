@@ -21,7 +21,7 @@ import {
 } from "@/lib/supervision-outcome";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
-import { TASKS_CHANGED_EVENT, emitClientEvent } from "@/lib/client-events";
+import { TASKS_CHANGED_EVENT } from "@/lib/client-events";
 import {
   getExecuteBlockedMessage,
   toScheduledTaskLike,
@@ -62,12 +62,10 @@ import { useI18n } from "@/i18n/i18n-provider";
 import {
   formatBlockLabelLocalized,
   formatBlockStartTimeLocalized,
-  formatBreakDurationHintLocalized,
   formatEnrollmentTimeoutLabelLocalized,
   translateDistractionOrHint,
 } from "@/lib/monitor-i18n";
 
-type LogEntry = { time: string; text: string; type: "normal" | "warning" | "success" };
 type Task = {
   id: number;
   text: string;
@@ -80,17 +78,6 @@ type Task = {
 };
 
 const DEFAULT_FOCUS_SECONDS = SUPERVISION_FOCUS_BLOCK_MINUTES * 60;
-
-function getNowStr(dateLocale: string) {
-  return new Date().toLocaleTimeString(dateLocale, { hour12: false });
-}
-
-const PRIORITY_ORDER = [
-  "import-urgent",
-  "import-noturgent",
-  "notimport-urgent",
-  "notimport-noturgent",
-];
 
 function playBeep() {
   try {
@@ -145,10 +132,7 @@ export function MonitorScreen() {
   const [distractionCount, setDistractionCount] = useState(0);
   const [distractionPlayKey, setDistractionPlayKey] = useState(0);
   const [focusPlayKey, setFocusPlayKey] = useState(0);
-  const [topTaskText, setTopTaskText] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-
   // Officer 选择弹窗状态
   const [showOfficerModal, setShowOfficerModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<{ id: number; text: string } | null>(null);
@@ -199,7 +183,6 @@ export function MonitorScreen() {
 
   useEffect(() => {
     setMockEventText(t("monitor.status.allNormal"));
-    setLogs([{ time: getNowStr(dateLocale), text: t("monitor.log.boot"), type: "normal" }]);
   }, [t, locale, dateLocale]);
 
   const pendingScheduledTasks: ScheduledTaskLike[] = tasks
@@ -212,28 +195,8 @@ export function MonitorScreen() {
     enableBrowserNotification: true,
   });
 
-  const syncTopTask = useCallback((items: Task[], activeTask?: string | null) => {
-    if (activeTask?.trim()) {
-      setTopTaskText(activeTask);
-      return;
-    }
-
-    const top = PRIORITY_ORDER
-      .flatMap((category) => items.filter((task) => !task.checked && task.category === category))
-      .find(Boolean);
-
-    setTopTaskText(top?.text ?? "");
-  }, []);
-
-  const addLog = useCallback(
-    (text: string, type: LogEntry["type"] = "normal") => {
-      setLogs((prev) => [{ time: getNowStr(dateLocale), text, type }, ...prev.slice(0, 20)]);
-    },
-    [dateLocale]
-  );
-
   const beginFocusBlock = useCallback(
-    (blocks: SupervisionFocusBlock[], blockIndex: number, taskText: string) => {
+    (blocks: SupervisionFocusBlock[], blockIndex: number) => {
       const block = blocks[blockIndex];
       if (!block) return;
 
@@ -255,29 +218,14 @@ export function MonitorScreen() {
         totalDistractionsRef.current = 0;
         taskDistractionsRef.current = [];
       }
-      setTopTaskText(taskText);
       updateSupervisionRun({
         focusBlocks: blocks,
         currentBlockIndex: blockIndex,
       });
-      addLog(
-        t("monitor.log.blockStart", {
-          label: formatBlockLabelLocalized(blockIndex, blocks.length, t),
-          task: taskText,
-          minutes: Math.ceil(seconds / 60),
-        }),
-        "normal"
-      );
       setBlockEnrollmentReady(false);
       setTimerRunning(false);
       enrollmentGateHandledRef.current = false;
       enrollmentGateDeadlineRef.current = Date.now() + ENROLLMENT_TIMEOUT_MS;
-      addLog(
-        t("monitor.log.enrollPrompt", {
-          timeout: formatEnrollmentTimeoutLabelLocalized(t),
-        }),
-        "warning"
-      );
 
       queueMicrotask(() => {
         if (crtRef.current?.isCameraActive()) {
@@ -285,7 +233,7 @@ export function MonitorScreen() {
         }
       });
     },
-    [addLog, t]
+    []
   );
 
   const launchSupervisionWithOfficer = useCallback(
@@ -310,7 +258,6 @@ export function MonitorScreen() {
           });
 
       if (blocks.length === 0) {
-        addLog(t("monitor.log.noBlocks"), "warning");
         return;
       }
 
@@ -331,10 +278,8 @@ export function MonitorScreen() {
         currentBlockIndex: startIndex,
         completedBlockIndexes: run?.completedBlockIndexes ?? [],
       });
-      addLog(t("monitor.log.officerAssigned", { name: officer.name }), "success");
-      addLog(t("monitor.log.blocksInfo", { count: blocks.length }), "normal");
       playChime();
-      beginFocusBlock(blocks, startIndex, task.text);
+      beginFocusBlock(blocks, startIndex);
 
       window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -346,18 +291,16 @@ export function MonitorScreen() {
         });
         try {
           await crtRef.current?.startCamera();
-          addLog(t("monitor.log.cameraStarted"), "success");
         } catch {
           if (attempt < 2) {
             window.setTimeout(() => void startCameraWithRetry(attempt + 1), 400);
             return;
           }
-          addLog(t("monitor.log.cameraManual"), "warning");
         }
       };
       void startCameraWithRetry();
     },
-    [addLog, beginFocusBlock, tasks, t]
+    [beginFocusBlock, tasks]
   );
 
   const openSupervisionForTask = useCallback(
@@ -493,10 +436,6 @@ export function MonitorScreen() {
       abortingSupervisionRef.current = true;
 
       const officerId = run.officerId ?? currentOfficerId;
-      const blockLabel =
-        totalFocusBlocks > 0
-          ? formatBlockLabelLocalized(currentBlockIndex, totalFocusBlocks, t)
-          : t("monitor.stats.block");
       const completedCount = run.completedBlockIndexes?.length ?? 0;
 
       stopSupervisionMedia();
@@ -522,13 +461,6 @@ export function MonitorScreen() {
           durationMinutes: SUPERVISION_FOCUS_BLOCK_MINUTES,
         });
 
-        addLog(
-          record.ok
-            ? t("monitor.log.taskFail", { task: run.taskText, block: blockLabel, reason })
-            : t("monitor.log.taskFailUnsaved", { task: run.taskText }),
-          record.ok ? "warning" : "normal"
-        );
-
         setOutcomeModal({
           kind: "block-fail",
           failReason: reason,
@@ -550,7 +482,6 @@ export function MonitorScreen() {
       }
     },
     [
-      addLog,
       buildCurrentOutcomeStats,
       currentBlockIndex,
       currentOfficerId,
@@ -588,14 +519,7 @@ export function MonitorScreen() {
     setTimer(seconds);
     setBlockEnrollmentReady(true);
     setTimerRunning(true);
-    addLog(
-      t("monitor.log.enrollDone", {
-        label: formatBlockLabelLocalized(blockIndex, blocks.length, t),
-        minutes: Math.ceil(seconds / 60),
-      }),
-      "success"
-    );
-  }, [addLog, currentBlockIndex, focusBlocks, t]);
+  }, [currentBlockIndex, focusBlocks, t]);
 
   const handleEnrollmentTimeout = useCallback(() => {
     if (enrollmentGateHandledRef.current) return;
@@ -666,7 +590,6 @@ export function MonitorScreen() {
   useEffect(() => {
     if (authLoading) return;
 
-    const activeTaskText = selectedTask?.text ?? null;
     let cancelled = false;
 
     const syncTasks = async () => {
@@ -675,7 +598,6 @@ export function MonitorScreen() {
           if (cancelled) return;
           setTasks([]);
           setSelectedTask(null);
-          syncTopTask([], null);
         });
         return;
       }
@@ -685,18 +607,15 @@ export function MonitorScreen() {
         if (!res.ok) {
           if (cancelled) return;
           setTasks([]);
-          syncTopTask([], null);
           return;
         }
 
         const items = (await res.json()) as Task[];
         if (cancelled) return;
         setTasks(items);
-        syncTopTask(items, activeTaskText);
       } catch {
         if (cancelled) return;
         setTasks([]);
-        syncTopTask([], null);
       }
     };
 
@@ -712,7 +631,7 @@ export function MonitorScreen() {
       cancelled = true;
       window.removeEventListener(TASKS_CHANGED_EVENT, refresh);
     };
-  }, [authLoading, selectedTask, syncTopTask, user]);
+  }, [authLoading, selectedTask, user]);
 
   useEffect(() => {
     if (authLoading || !user || tasks.length === 0 || executeHandledRef.current) return;
@@ -741,9 +660,7 @@ export function MonitorScreen() {
     clearStashedExecuteTask();
 
     openSupervisionForTask(task);
-    addLog(t("monitor.log.enterTask", { task: task.text }), "normal");
   }, [
-    addLog,
     authLoading,
     openSupervisionForTask,
     reminderNow,
@@ -766,7 +683,6 @@ export function MonitorScreen() {
 
     if (!user) {
       stopSupervisionMedia();
-      addLog(t("monitor.log.guestMode"), "normal");
       setOutcomeModal({
         kind: "task-success",
         recordSaved: false,
@@ -787,12 +703,6 @@ export function MonitorScreen() {
     });
 
     stopSupervisionMedia();
-    addLog(
-      record.ok
-        ? t("monitor.log.taskSuccess", { task: run.taskText })
-        : t("monitor.log.taskSaveFail"),
-      record.ok ? "success" : "warning"
-    );
     playChime();
 
     setOutcomeModal({
@@ -805,7 +715,6 @@ export function MonitorScreen() {
         }),
     });
   }, [
-    addLog,
     buildCurrentOutcomeStats,
     currentOfficerId,
     focusBlocks,
@@ -847,15 +756,6 @@ export function MonitorScreen() {
 
     const completed = [...(run.completedBlockIndexes ?? []), currentBlockIndex];
     const nextIndex = currentBlockIndex + 1;
-    const blockLabel = formatBlockLabelLocalized(currentBlockIndex, blocks.length, t);
-
-    addLog(
-      t("monitor.log.blockDone", {
-        label: blockLabel,
-        stars: SUPERVISION_MAX_STRIKES - distractionCount,
-      }),
-      "success"
-    );
     playChime();
 
     if (nextIndex >= blocks.length) {
@@ -894,7 +794,6 @@ export function MonitorScreen() {
     completingBlockRef.current = false;
   }, [
     activeOfficer.name,
-    addLog,
     buildCurrentOutcomeStats,
     completeTaskSuccess,
     currentBlockIndex,
@@ -976,14 +875,6 @@ export function MonitorScreen() {
         recordDistractionStrike(event.reason, currentBlockIndex);
         setDistractionCount(next);
         playBeep();
-        addLog(
-          t("monitor.log.slackingStrike", {
-            block: currentBlockIndex + 1,
-            strike: next,
-            reason: translateDistractionOrHint(event.reason, t),
-          }),
-          "warning"
-        );
         return;
       }
 
@@ -999,27 +890,11 @@ export function MonitorScreen() {
 
       if (event.level === 1) {
         playChime();
-        addLog(
-          t("monitor.log.minorDrift", {
-            reason: translateDistractionOrHint(event.reason, t),
-          }),
-          "normal"
-        );
       } else {
         playBeep();
-        const levelLabel =
-          event.level === 4
-            ? t("monitor.log.levelIdentity")
-            : event.level === 3
-              ? t("monitor.log.levelLeave")
-              : t("monitor.log.levelSlacking");
-        addLog(
-          t("monitor.log.alertVideo", { level: levelLabel, name: activeOfficer.name }),
-          "warning"
-        );
       }
     },
-    [activeOfficer.name, addLog, currentBlockIndex, currentOfficerId, recordDistractionStrike, t]
+    [activeOfficer.name, currentBlockIndex, currentOfficerId, recordDistractionStrike, t]
   );
 
   const handleYuriThirdStrikeComplete = useCallback(() => {
@@ -1050,7 +925,6 @@ export function MonitorScreen() {
         setFocusPlayKey((k) => k + 1);
         setMockEventText(t("monitor.status.laborRestored"));
         playChime();
-        addLog(t("monitor.log.laborRestored"), "success");
       }}
       onCameraClosedByUser={handleCameraClosedByUser}
       onEnrollmentTimeout={handleEnrollmentTimeout}
@@ -1100,14 +974,8 @@ export function MonitorScreen() {
     setOutcomeModal(null);
     setBreakPhase(null);
     breakPhaseRef.current = false;
-    addLog(
-      t("monitor.log.nextBlock", {
-        label: formatBlockLabelLocalized(pending.nextIndex, pending.blocks.length, t),
-      }),
-      "normal"
-    );
-    beginFocusBlock(pending.blocks, pending.nextIndex, pending.taskText);
-  }, [addLog, beginFocusBlock, t]);
+    beginFocusBlock(pending.blocks, pending.nextIndex);
+  }, [beginFocusBlock, t]);
 
   const beginBreakPhaseFromPending = useCallback(
     (options?: { dismissOutcomeModal?: boolean }) => {
@@ -1135,15 +1003,8 @@ export function MonitorScreen() {
         taskText: pending.taskText,
         secondsRemaining,
       });
-      addLog(
-        t("monitor.log.breakUntil", {
-          duration: formatBreakDurationHintLocalized(secondsRemaining, t),
-          label: formatBlockLabelLocalized(pending.nextIndex, pending.blocks.length, t),
-        }),
-        "normal"
-      );
     },
-    [addLog, startNextFocusBlock, t]
+    [startNextFocusBlock, t]
   );
 
   const handleStartBreak = useCallback(() => {

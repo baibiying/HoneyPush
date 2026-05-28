@@ -1,34 +1,54 @@
 A minimal Next.js starter for building apps inside the [Eazo](https://eazo.ai) platform. Includes a working example of the Eazo session token flow: the app requests the encrypted user token from the host via `postMessage`, sends it to a Next.js API route, decrypts it server-side with `@eazo/node-sdk`, and returns the user profile.
 
+## Production
+
+| Environment | URL |
+|---|---|
+| Vercel (production) | [https://honeypush.vercel.app](https://honeypush.vercel.app) |
+
+`*.vercel.app` may be slow or blocked in mainland China.
+
 ## Getting Started
 
-Install dependencies with Bun:
+### 1. Local database (Docker)
+
+Register, login, and tasks need PostgreSQL. Start the dev database with Docker Compose (`docker-compose.yml`):
+
+```bash
+docker compose up -d
+```
+
+Default connection (also in `.env.example`):
+
+`postgresql://postgres:postgres@localhost:5432/honeypush`
+
+### 2. Install and configure
 
 ```bash
 bun install
+cp .env.example .env
+bun run db:migrate
 ```
 
-If dependency installation stalls on this machine during `sharp` setup, use:
+If `bun install` stalls on `sharp`, use:
 
 ```bash
 SHARP_IGNORE_GLOBAL_LIBVIPS=1 bun install
 ```
 
-Then start the development server:
+### 3. Run the app
 
 ```bash
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
+
+Without Docker Postgres running, the app will show a database connection error (see `src/lib/db/errors.ts`).
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in your private key:
-
-```bash
-cp .env.example .env
-```
+`.env` is created in step 2 above. Main variables:
 
 | Variable | Description |
 |---|---|
@@ -45,36 +65,16 @@ cp .env.example .env
 - [Eazo Documentation](https://docs.eazo.ai)
 - [Next.js Documentation](https://nextjs.org/docs)
 
-## Deploy
+## Deploy (Vercel)
 
-### Vercel (overseas)
+Live: [https://honeypush.vercel.app](https://honeypush.vercel.app)
 
 ```bash
 vercel deploy --prod
 ```
 
-Requires `DATABASE_URL` (Neon) in project settings.  
+Requires `DATABASE_URL` (e.g. [Neon](https://neon.tech) PostgreSQL) in the Vercel project settings. The build runs database migrations via `vercel.json` → `scripts/vercel-build.mjs`.
+
+Optional env vars: `LLM_API_KEY` (AI scheduling), `CRON_SECRET` (daily notification cron in `vercel.json`).
+
 **Note:** `*.vercel.app` may need VPN in mainland China.
-
-### Railway (full-stack, trial credits)
-
-See [docs/DEPLOY-RAILWAY.md](docs/DEPLOY-RAILWAY.md) — GitHub + PostgreSQL plugin; uses `Dockerfile` in repo.  
-**Note:** Also overseas; may need VPN in China. Not permanently free after trial.
-
-### Zeabur (requires a server)
-
-See [docs/DEPLOY-ZEABUR.md](docs/DEPLOY-ZEABUR.md) — deploy from GitHub with managed PostgreSQL; usually works in China **without VPN**.
-
-Key env vars on the app service:
-
-- `DATABASE_URL` = `${POSTGRES_CONNECTION_STRING}`
-- `NEXT_PUBLIC_SITE_URL` = `${ZEABUR_WEB_URL}`
-
-### Docker (own VPS)
-
-See [docs/DEPLOY-CHINA.md](docs/DEPLOY-CHINA.md) — self-host on a HK/CN VPS.
-
-```bash
-cp .env.production.example .env.production
-docker compose -f docker-compose.prod.yml up -d --build
-```
