@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Play, X } from "lucide-react";
 import type { Officer } from "@/lib/officers-data";
 import { getOfficerPreviewVideoSrc } from "@/lib/officers-data";
+import { preloadOfficerPreviewVideo } from "@/lib/officers/preload-officer-videos";
 import { OfficerClipVideo } from "./officer-clip-video";
 import { useI18n } from "@/i18n/i18n-provider";
 
@@ -23,6 +24,10 @@ export function OfficerVideoPreview({ officer }: OfficerVideoPreviewProps) {
   const videoSrc = getOfficerPreviewVideoSrc(officer);
 
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    void preloadOfficerPreviewVideo(officer.id);
+  }, [officer.id, videoSrc]);
 
   useEffect(() => {
     if (!open) return;

@@ -18,7 +18,8 @@ import { OfficerClipVideo } from "@/components/screens/schedule/officer-clip-vid
 import { YuriOfficerVideo } from "@/components/screens/monitor/yuri-officer-video";
 import { SupervisionFocusTimer } from "@/components/screens/monitor/supervision-focus-timer";
 import { YuriStrikeStars } from "@/components/screens/monitor/yuri-strike-stars";
-import { preloadVideoAsset } from "@/lib/media-playback";
+import type { OfficerId } from "@/lib/officers-data";
+import { preloadOfficerVideosCritical } from "@/lib/officers/preload-officer-videos";
 import {
   primeUnmutedVideoPlayback,
   unlockBrowserAudio,
@@ -112,6 +113,8 @@ interface CrtMonitorProps {
   onYuriIdleRecoveryStart?: () => void;
   /** 段间休息时暂停摸鱼检测 */
   behaviorDetectionPaused?: boolean;
+  /** 本段已失败/结束时不再提示「请开启摄像头」 */
+  hideCameraOffHint?: boolean;
   fillViewport?: boolean;
   /** 本段专注倒计时（剩余 / 已专注） */
   focusTimer?: {
@@ -151,6 +154,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
     yuriStrikeCount = 0,
     onYuriIdleRecoveryStart,
     behaviorDetectionPaused = false,
+    hideCameraOffHint = false,
     fillViewport = false,
     focusTimer,
   },
@@ -704,9 +708,12 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
 
   const startCamera = useCallback(async () => {
     if (cameraActiveRef.current) return;
+    const oid = officerId as OfficerId;
+    if (oid === "yuri" || oid === "gu" || oid === "lin") {
+      void preloadOfficerVideosCritical(oid);
+    }
     if (isYuriOfficer) {
       primeUnmutedVideoPlayback(YURI_SUPERVISION_VIDEOS.intro);
-      preloadVideoAsset(YURI_SUPERVISION_VIDEOS.idle);
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -1094,7 +1101,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
             )}
         </div>
 
-        {!cameraActive && (
+        {!cameraActive && !hideCameraOffHint && (
           <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center p-4 pointer-events-none bg-black/40">
             <p className="text-sm px-6 text-stone-300 text-center leading-relaxed max-w-md drop-shadow">
               {t("monitor.crt.cameraOffHint")}

@@ -1,4 +1,5 @@
 import { emitClientEvent } from "@/lib/client-events";
+import { preloadOfficerVideos } from "@/lib/officers/preload-officer-videos";
 import { OFFICERS, type OfficerId } from "@/lib/officers-data";
 
 export const PREFERRED_OFFICER_STORAGE_KEY = "honeypush-preferred-officer-v1";
@@ -23,6 +24,7 @@ export function setPreferredOfficer(id: OfficerId | null) {
     localStorage.removeItem(PREFERRED_OFFICER_STORAGE_KEY);
   } else {
     localStorage.setItem(PREFERRED_OFFICER_STORAGE_KEY, id);
+    void preloadOfficerVideos(id);
   }
   emitClientEvent(PREFERRED_OFFICER_CHANGED_EVENT);
 }

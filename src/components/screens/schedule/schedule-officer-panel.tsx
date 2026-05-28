@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { preloadOfficerPanelVideos } from "@/lib/officers/preload-officer-videos";
 import { motion } from "framer-motion";
 import { Check, Shield, Sparkles } from "lucide-react";
 import { OFFICERS, type Officer, type OfficerId } from "@/lib/officers-data";
@@ -162,6 +163,10 @@ export function ScheduleOfficerPanel({
 }: ScheduleOfficerPanelProps) {
   const { t } = useI18n();
   const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    preloadOfficerPanelVideos(selectedId);
+  }, [selectedId]);
 
   const handlePick = (id: OfficerId) => {
     if (!canEdit) {

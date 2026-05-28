@@ -52,7 +52,10 @@ import {
   exitSupervisionFullscreen,
   requestSupervisionFullscreen,
 } from "@/lib/supervision-fullscreen";
-import { preloadVideoAsset } from "@/lib/media-playback";
+import {
+  preloadOfficerVideos,
+  preloadOfficerVideosCritical,
+} from "@/lib/officers/preload-officer-videos";
 import { primeUnmutedVideoPlayback } from "@/lib/unlock-browser-audio";
 import { YURI_SUPERVISION_VIDEOS } from "@/lib/officers/yuri-supervision-videos";
 import { useI18n } from "@/i18n/i18n-provider";
@@ -287,9 +290,10 @@ export function MonitorScreen() {
 
   const launchSupervisionWithOfficer = useCallback(
     (officerId: OfficerId, task: { id: number; text: string }) => {
+      void preloadOfficerVideosCritical(officerId);
+      void preloadOfficerVideos(officerId);
       if (officerId === "yuri") {
         primeUnmutedVideoPlayback(YURI_SUPERVISION_VIDEOS.intro);
-        preloadVideoAsset(YURI_SUPERVISION_VIDEOS.idle);
       }
       setCurrentOfficerId(officerId);
       setShowOfficerModal(false);
@@ -361,18 +365,14 @@ export function MonitorScreen() {
       const fullTask = tasks.find((item) => item.id === task.id) ?? task;
       const blocks = resolveSupervisionFocusBlocks(fullTask);
 
-      if (task.scheduledStartAt) {
-        startSupervisionRun({
-          taskId: task.id,
-          taskText: task.text,
-          scheduledStartAt: task.scheduledStartAt,
-          focusBlocks: blocks,
-          currentBlockIndex: 0,
-          completedBlockIndexes: [],
-        });
-      } else {
-        setSupervisionRun(null);
-      }
+      startSupervisionRun({
+        taskId: task.id,
+        taskText: task.text,
+        scheduledStartAt: task.scheduledStartAt ?? new Date().toISOString(),
+        focusBlocks: blocks,
+        currentBlockIndex: 0,
+        completedBlockIndexes: [],
+      });
       setSelectedTask({ id: task.id, text: task.text });
 
       const preferred = readPreferredOfficer();
@@ -492,12 +492,29 @@ export function MonitorScreen() {
       if (abortingSupervisionRef.current) return;
       abortingSupervisionRef.current = true;
 
+      const officerId = run.officerId ?? currentOfficerId;
+      const blockLabel =
+        totalFocusBlocks > 0
+          ? formatBlockLabelLocalized(currentBlockIndex, totalFocusBlocks, t)
+          : t("monitor.stats.block");
+      const completedCount = run.completedBlockIndexes?.length ?? 0;
+
+      stopSupervisionMedia();
+      playBeep();
+      setOutcomeModal({
+        kind: "block-fail",
+        failReason: reason,
+        recordSaved: false,
+        stats: buildCurrentOutcomeStats(
+          run,
+          completedCount,
+          currentBlockIndex,
+          { coinsEarned: 0 },
+          { scope: "through-current-block" }
+        ),
+      });
+
       try {
-        const officerId = run.officerId ?? currentOfficerId;
-        const blockLabel =
-          totalFocusBlocks > 0
-            ? formatBlockLabelLocalized(currentBlockIndex, totalFocusBlocks, t)
-            : t("monitor.stats.block");
         const record = await recordTaskExecutionFailure({
           taskId: run.taskId,
           officerId,
@@ -505,8 +522,6 @@ export function MonitorScreen() {
           durationMinutes: SUPERVISION_FOCUS_BLOCK_MINUTES,
         });
 
-        stopSupervisionMedia();
-        playBeep();
         addLog(
           record.ok
             ? t("monitor.log.taskFail", { task: run.taskText, block: blockLabel, reason })
@@ -520,7 +535,7 @@ export function MonitorScreen() {
           recordSaved: record.ok,
           stats: buildCurrentOutcomeStats(
             run,
-            run.completedBlockIndexes?.length ?? 0,
+            completedCount,
             currentBlockIndex,
             {
               coinsEarned: 0,
@@ -547,12 +562,13 @@ export function MonitorScreen() {
 
   const handleCameraClosedByUser = useCallback(() => {
     const run = readSupervisionRun();
-    if (!run?.launched) return;
+    if (!run) return;
     if (breakPhaseRef.current) return;
+    if (outcomeModal) return;
     cameraClosedByUserRef.current = true;
     setIsDistracted(false);
-    failCurrentBlock(t("monitor.log.cameraClosed"));
-  }, [failCurrentBlock, t]);
+    void failCurrentBlock(t("monitor.log.cameraClosed"));
+  }, [failCurrentBlock, outcomeModal, t]);
 
   const handleEnrollmentReady = useCallback(() => {
     const run = readSupervisionRun();
@@ -1047,6 +1063,7 @@ export function MonitorScreen() {
         setMockEventText(t("monitor.status.keepFraming"));
       }}
       behaviorDetectionPaused={breakPhase != null}
+      hideCameraOffHint={outcomeModal != null}
       fillViewport
       focusTimer={
         timerRunning && blockEnrollmentReady && !breakPhase && currentBlock

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { useI18n } from "@/i18n/i18n-provider";
-import { playVideoRobust, preloadVideoAsset } from "@/lib/media-playback";
+import { playVideoRobust } from "@/lib/media-playback";
 import {
   YURI_PATROL_CYCLE,
   YURI_SUPERVISION_VIDEOS,
@@ -61,14 +61,6 @@ export function YuriOfficerVideo({
 
   phaseRef.current = phase;
   patrolIndexRef.current = patrolIndex;
-
-  useEffect(() => {
-    preloadVideoAsset(YURI_SUPERVISION_VIDEOS.intro);
-    preloadVideoAsset(YURI_SUPERVISION_VIDEOS.idle);
-    for (const url of YURI_PATROL_CYCLE) {
-      preloadVideoAsset(url);
-    }
-  }, []);
 
   const playSrc = useCallback(
     (nextSrc: string) => {

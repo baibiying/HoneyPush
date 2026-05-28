@@ -8,6 +8,7 @@ import { GlobalScheduledTaskRunner } from "@/components/layout/global-scheduled-
 import { GlobalSupervisionTakeover } from "@/components/layout/global-supervision-takeover";
 import { GlobalUpcomingTaskToasts } from "@/components/layout/global-upcoming-task-toasts";
 import { GameSfxProvider } from "@/components/layout/game-sfx-provider";
+import { OfficerVideoPreloader } from "@/components/layout/officer-video-preloader";
 import { MainContentShell } from "@/components/layout/main-content-shell";
 import { fontClassNames } from "@/app/fonts";
 
@@ -57,6 +58,7 @@ export default function RootLayout({
         <I18nProvider>
           <GameSfxProvider>
           <AuthProvider>
+            <OfficerVideoPreloader />
             <GlobalUpcomingTaskToasts />
             <GlobalScheduledTaskRunner />
             <GlobalSupervisionTakeover />

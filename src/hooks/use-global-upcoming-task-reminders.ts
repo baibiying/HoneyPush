@@ -16,6 +16,11 @@ import {
   loadDismissedReminderKeys,
 } from "@/lib/task-reminder-dismissals";
 import { buildTaskReminderKey } from "@/lib/schedule-execution";
+import { preloadOfficerVideos } from "@/lib/officers/preload-officer-videos";
+import { readPreferredOfficer } from "@/lib/preferred-officer";
+
+/** 任务开始前 20 分钟内预加载监督官视频 */
+const UPCOMING_TASK_PRELOAD_MS = 20 * 60 * 1000;
 
 type ApiTask = {
   id: number;
@@ -89,6 +94,24 @@ export function useGlobalUpcomingTaskReminders({
       window.removeEventListener("online", refresh);
     };
   }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled || tasks.length === 0) return;
+    const officerId = readPreferredOfficer();
+    if (!officerId) return;
+
+    const hasTaskStartingSoon = tasks.some((task) => {
+      if (!task.scheduledStartAt) return false;
+      const startMs = new Date(task.scheduledStartAt).getTime();
+      if (Number.isNaN(startMs)) return false;
+      const delta = startMs - nowMs;
+      return delta > 0 && delta <= UPCOMING_TASK_PRELOAD_MS;
+    });
+
+    if (hasTaskStartingSoon) {
+      void preloadOfficerVideos(officerId);
+    }
+  }, [enabled, tasks, nowMs]);
 
   const now = useMemo(() => new Date(nowMs), [nowMs]);
 
