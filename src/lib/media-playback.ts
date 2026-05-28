@@ -6,7 +6,8 @@ const PRELOAD_POOL = new Map<string, HTMLVideoElement>();
 const PRELOAD_LINKS = new Set<string>();
 let poolContainer: HTMLDivElement | null = null;
 
-const PRELOAD_READY_STATE = HTMLMediaElement.HAVE_FUTURE_DATA;
+/** HTMLMediaElement.HAVE_FUTURE_DATA — avoid referencing HTMLMediaElement at module scope (SSR). */
+const PRELOAD_READY_STATE = 3;
 const PRELOAD_TIMEOUT_MS = 60_000;
 
 function getPoolContainer() {
