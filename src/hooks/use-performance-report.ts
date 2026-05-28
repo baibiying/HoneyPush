@@ -10,7 +10,13 @@ import {
 } from "@/lib/client-events";
 import type { TaskPerformanceReport } from "@/lib/task-performance";
 
-export function usePerformanceReport() {
+type UsePerformanceReportOptions = {
+  /** Defer first fetch so the homepage can paint first. */
+  defer?: boolean;
+};
+
+export function usePerformanceReport(options: UsePerformanceReportOptions = {}) {
+  const { defer = false } = options;
   const { user, loading: authLoading } = useAuth();
   const [report, setReport] = useState<TaskPerformanceReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,8 +46,31 @@ export function usePerformanceReport() {
 
   useEffect(() => {
     if (authLoading) return;
-    void load();
-  }, [authLoading, load]);
+
+    if (!defer) {
+      void load();
+      return;
+    }
+
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) void load();
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(run, { timeout: 2500 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(id);
+      };
+    }
+
+    const timer = window.setTimeout(run, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [authLoading, defer, load]);
 
   useEffect(() => {
     if (!user) return;

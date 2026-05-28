@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { memory } from "@eazo/sdk";
@@ -11,7 +12,13 @@ import { TaskAddPanel } from "./task-add-panel";
 import { TaskEditDialog, type ScheduleTask } from "./task-edit-dialog";
 import { QuadrantTaskBoard } from "./quadrant-task-board";
 import { ScheduleCalendar } from "./schedule-calendar";
-import { PerformancePanel } from "@/components/screens/performance/performance-panel";
+const PerformancePanel = dynamic(
+  () =>
+    import("@/components/screens/performance/performance-panel").then((mod) => ({
+      default: mod.PerformancePanel,
+    })),
+  { ssr: false }
+);
 import { usePerformanceReport } from "@/hooks/use-performance-report";
 import { ScheduleGameHub, type ScheduleScene } from "./schedule-game-hub";
 import { MapPerformanceDock } from "./map-performance-dock";
@@ -120,7 +127,7 @@ export function ScheduleScreen() {
   const { user, loading: authLoading, promptLogin } = useAuth();
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
   const [tasksLoadError, setTasksLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [tasksLoading, setTasksLoading] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
   const [availabilitySlots, setAvailabilitySlots] = useState(loadAvailabilitySlots);
   const [aiLoading, setAiLoading] = useState(false);
@@ -129,7 +136,8 @@ export function ScheduleScreen() {
   const [savingEdit, setSavingEdit] = useState(false);
   const searchParams = useSearchParams();
   const [scene, setScene] = useState<ScheduleScene>("map");
-  const { report: performanceReport, loading: performanceLoading } = usePerformanceReport();
+  const { report: performanceReport, loading: performanceLoading } =
+    usePerformanceReport({ defer: true });
   const [preferredOfficerId, setPreferredOfficerId] = useState<OfficerId | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [schedulePromptOpen, setSchedulePromptOpen] = useState(false);
@@ -296,13 +304,13 @@ export function ScheduleScreen() {
           if (cancelled) return;
           setTasks([]);
           setTasksLoadError(null);
-          setLoading(false);
+          setTasksLoading(false);
         });
         return;
       }
 
       Promise.resolve().then(() => {
-        if (!cancelled) setLoading(true);
+        if (!cancelled) setTasksLoading(true);
       });
 
       try {
@@ -330,7 +338,7 @@ export function ScheduleScreen() {
         setTasksLoadError(t("tasks.loadFailed"));
         console.error("[schedule] syncTasks error:", err);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setTasksLoading(false);
       }
     };
 
@@ -696,12 +704,12 @@ export function ScheduleScreen() {
     }
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center">
         <div className="text-center space-y-2">
-          <p className="font-bangers text-2xl text-[#1C1917]">{t("hub.loadingTitle")}</p>
-          <p className="text-sm font-comic text-neutral-500">{t("hub.loadingSubtitle")}</p>
+          <p className="font-bangers text-2xl text-amber-100">{t("hub.loadingTitle")}</p>
+          <p className="text-sm font-comic text-amber-100/70">{t("hub.loadingSubtitle")}</p>
         </div>
       </div>
     );
@@ -817,7 +825,7 @@ export function ScheduleScreen() {
         mapPerformanceDock={
           <MapPerformanceDock
             report={performanceReport}
-            loading={performanceLoading}
+            loading={tasksLoading || performanceLoading}
             canEdit={canEdit}
             onOpenReport={() => setScene("performance")}
             onRequireLogin={promptLogin}
