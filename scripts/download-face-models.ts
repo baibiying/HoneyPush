@@ -10,12 +10,12 @@ const BASE =
   "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights";
 const FILES = [
   "tiny_face_detector_model-weights_manifest.json",
-  "tiny_face_detector_model-shard1",
+  "tiny_face_detector_model-shard1.bin",
   "face_landmark_68_model-weights_manifest.json",
-  "face_landmark_68_model-shard1",
+  "face_landmark_68_model-shard1.bin",
   "face_recognition_model-weights_manifest.json",
-  "face_recognition_model-shard1",
-  "face_recognition_model-shard2",
+  "face_recognition_model-shard1.bin",
+  "face_recognition_model-shard2.bin",
 ];
 
 const dirPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "../public/models");
