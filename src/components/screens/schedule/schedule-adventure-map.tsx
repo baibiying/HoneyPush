@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { QuestStep } from "./schedule-game-hub";
 import type { StationConfig } from "./schedule-stations";
+import { playGameHover } from "@/lib/game-sfx";
 import { useLocalizedStations } from "@/hooks/use-localized-stations";
 import { useI18n } from "@/i18n/i18n-provider";
 
@@ -749,6 +750,7 @@ function IslandNode({
     <button
       type="button"
       onClick={onActivate}
+      onPointerEnter={() => playGameHover()}
       style={{
         left: center.left,
         top: center.top,

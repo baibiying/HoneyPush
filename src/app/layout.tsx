@@ -7,6 +7,7 @@ import { I18nProvider } from "@/i18n/i18n-provider";
 import { GlobalScheduledTaskRunner } from "@/components/layout/global-scheduled-task-runner";
 import { GlobalSupervisionTakeover } from "@/components/layout/global-supervision-takeover";
 import { GlobalUpcomingTaskToasts } from "@/components/layout/global-upcoming-task-toasts";
+import { GameSfxProvider } from "@/components/layout/game-sfx-provider";
 import { MainContentShell } from "@/components/layout/main-content-shell";
 
 const SITE_URL = process.env.VERCEL_URL
@@ -68,6 +69,7 @@ export default function RootLayout({
       </head>
       <body className="comic-bg-pattern min-h-svh flex flex-col">
         <I18nProvider>
+          <GameSfxProvider>
           <AuthProvider>
             <GlobalUpcomingTaskToasts />
             <GlobalScheduledTaskRunner />
@@ -77,6 +79,7 @@ export default function RootLayout({
             </main>
             <Toaster />
           </AuthProvider>
+          </GameSfxProvider>
         </I18nProvider>
       </body>
     </html>
