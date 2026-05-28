@@ -473,6 +473,10 @@ export const zhMessages = {
       "招募你的专属监督官。任务到点后将直接进入监督，自动开启摄像头，无需再次选择。",
     introStrong: "直接进入监督",
     saved: "已保存，到点将由此监督官执勤",
+    previewClip: "试看监督片段",
+    previewClose: "关闭",
+    previewCloseOverlay: "关闭预览",
+    previewLoadFailed: "预览加载失败，请稍后重试",
   },
 };
 

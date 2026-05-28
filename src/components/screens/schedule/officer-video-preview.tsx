@@ -7,12 +7,14 @@ import { Play, X } from "lucide-react";
 import type { Officer } from "@/lib/officers-data";
 import { getOfficerPreviewVideoSrc } from "@/lib/officers-data";
 import { OfficerClipVideo } from "./officer-clip-video";
+import { useI18n } from "@/i18n/i18n-provider";
 
 type OfficerVideoPreviewProps = {
   officer: Officer;
 };
 
 export function OfficerVideoPreview({ officer }: OfficerVideoPreviewProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -54,7 +56,7 @@ export function OfficerVideoPreview({ officer }: OfficerVideoPreviewProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              aria-label="关闭预览"
+              aria-label={t("officer.previewCloseOverlay")}
               className="absolute inset-0 bg-black/65 backdrop-blur-sm"
               onClick={() => setOpen(false)}
             />
@@ -89,7 +91,7 @@ export function OfficerVideoPreview({ officer }: OfficerVideoPreviewProps) {
                   type="button"
                   onClick={() => setOpen(false)}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-[#1c1917] bg-white shadow-[0_2px_0_#1c1917] hover:bg-amber-50"
-                  aria-label="关闭"
+                  aria-label={t("officer.previewClose")}
                 >
                   <X className="h-5 w-5 text-[#1c1917]" />
                 </button>
@@ -99,7 +101,7 @@ export function OfficerVideoPreview({ officer }: OfficerVideoPreviewProps) {
                 <div className="relative min-h-0 flex-1 overflow-hidden border-[3px] border-[#1c1917] bg-black shadow-[0_4px_0_#1c1917]">
                   {loadError ? (
                     <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm font-bold text-amber-100">
-                      预览加载失败，请稍后重试
+                      {t("officer.previewLoadFailed")}
                     </p>
                   ) : (
                     <OfficerClipVideo
@@ -139,7 +141,7 @@ export function OfficerVideoPreview({ officer }: OfficerVideoPreviewProps) {
           style={{ backgroundColor: officer.color }}
         >
           <Play className="h-4 w-4 sm:h-5 sm:w-5 fill-current" aria-hidden />
-          试看监督片段
+          {t("officer.previewClip")}
         </button>
       </div>
       {modal}

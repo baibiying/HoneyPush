@@ -484,5 +484,9 @@ export const enMessages: Messages = {
       "Recruit your supervisor. When a task starts, supervision begins at once with the camera — no extra pick.",
     introStrong: "supervision begins at once",
     saved: "Saved — this officer will supervise at start time",
+    previewClip: "Preview supervision clip",
+    previewClose: "Close",
+    previewCloseOverlay: "Close preview",
+    previewLoadFailed: "Preview failed to load. Try again later.",
   },
 };
