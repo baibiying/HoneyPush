@@ -152,7 +152,7 @@ function FailureCausePanel({
       </p>
       <div className="flex gap-4 sm:gap-5 items-start">
         <span className="flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-xl border-[3px] border-rose-300/50 bg-rose-600/40 comic-shadow">
-          <CauseIcon className="h-8 w-8 sm:h-9 sm:w-9 text-rose-100" strokeWidth={2.5} />
+          <CauseIcon className="h-8 w-8 sm:h-9 sm:w-9 text-rose-100" />
         </span>
         <div className="min-w-0 flex-1 text-left">
           <p className="font-bangers text-2xl sm:text-3xl md:text-4xl text-rose-100 tracking-wide leading-tight">
