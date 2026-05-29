@@ -3,6 +3,8 @@
 **Production:** [https://honeypush.vercel.app](https://honeypush.vercel.app)  
 **Product spec:** [docs/PRODUCT.md](docs/PRODUCT.md)
 
+Users in mainland China may need a VPN to open [https://honeypush.vercel.app/](https://honeypush.vercel.app/) (hosted on Vercel).
+
 ---
 
 ## English
