@@ -1,6 +1,7 @@
 # HoneyPush 督蜜
 
 **Production:** [https://honeypush.vercel.app](https://honeypush.vercel.app)  
+**Demo video:** [Bilibili — HoneyPush 督蜜 demo](https://www.bilibili.com/video/BV1FqVh6xEuH/)  
 **Product spec:** [docs/PRODUCT.md](docs/PRODUCT.md)
 
 Users in mainland China may need a VPN to open [https://honeypush.vercel.app/](https://honeypush.vercel.app/) (hosted on Vercel).
