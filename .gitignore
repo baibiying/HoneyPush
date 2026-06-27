@@ -8,6 +8,7 @@ out
 # env
 .env
 .env*.local
+.env.production
 
 # debug / OS
 npm-debug.log*
@@ -15,6 +16,11 @@ npm-debug.log*
 
 # vercel
 .vercel
+
+# local / dev-only (not for production deploy)
+src/app/dev/
+src/lib/dev/
+scripts/seed-local-performance-scroll.ts
 
 # typescript
 *.tsbuildinfo

@@ -12,19 +12,47 @@ export function isProductionRuntime() {
   );
 }
 
-/** Vercel + Neon integration may inject POSTGRES_URL instead of DATABASE_URL. */
-export function readDatabaseUrlFromEnv(): string | undefined {
+/** Pooled URLs are preferred for serverless runtime (Neon / Vercel). */
+export function readPooledDatabaseUrlFromEnv(): string | undefined {
   return (
-    process.env.DATABASE_URL?.trim() ||
     process.env.POSTGRES_URL?.trim() ||
     process.env.POSTGRES_PRISMA_URL?.trim() ||
+    process.env.DATABASE_URL?.trim() ||
     undefined
   );
 }
 
-/** Connection string for app runtime and migrations. */
+/** Direct URLs are preferred for migrations and long-lived connections. */
+export function readDirectDatabaseUrlFromEnv(): string | undefined {
+  return (
+    process.env.DATABASE_URL_UNPOOLED?.trim() ||
+    process.env.POSTGRES_URL_NON_POOLING?.trim() ||
+    readPooledDatabaseUrlFromEnv()
+  );
+}
+
+/** @deprecated Use readPooledDatabaseUrlFromEnv(). */
+export function readDatabaseUrlFromEnv(): string | undefined {
+  return readPooledDatabaseUrlFromEnv();
+}
+
+/** Connection string for app runtime (serverless-safe pooled URL). */
 export function resolveDatabaseUrl(): string {
-  const url = readDatabaseUrlFromEnv();
+  const url = readPooledDatabaseUrlFromEnv();
+  if (url) return url;
+
+  if (isProductionRuntime()) {
+    throw new Error(
+      "DATABASE_URL is not set. Configure a cloud PostgreSQL URL in Vercel environment variables."
+    );
+  }
+
+  return DEV_FALLBACK;
+}
+
+/** Connection string for migrations. */
+export function resolveMigrationDatabaseUrl(): string {
+  const url = readDirectDatabaseUrlFromEnv();
   if (url) return url;
 
   if (isProductionRuntime()) {
@@ -37,6 +65,6 @@ export function resolveDatabaseUrl(): string {
 }
 
 export function isDatabaseUrlConfiguredForProduction() {
-  const url = readDatabaseUrlFromEnv();
+  const url = readPooledDatabaseUrlFromEnv();
   return Boolean(url && !isLocalDatabaseUrl(url));
 }

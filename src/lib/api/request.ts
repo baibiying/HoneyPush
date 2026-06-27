@@ -3,7 +3,15 @@ export type RequestOptions = RequestInit & {
   retries?: number;
   /** Base delay between retries; multiplied by attempt index. */
   retryDelayMs?: number;
+  /** Abort the request if no response within this window. */
+  timeoutMs?: number;
 };
+
+export type RequestFailureKind = "timeout" | "network" | "unknown";
+
+const DEFAULT_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 400;
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => {
@@ -16,7 +24,11 @@ function isIdempotentMethod(method?: string) {
   return m === "GET" || m === "HEAD";
 }
 
-function isRetryableNetworkError(error: unknown) {
+export function isRetryableNetworkError(error: unknown) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+
   if (!(error instanceof TypeError)) return false;
   const msg = error.message.toLowerCase();
   return (
@@ -27,48 +39,94 @@ function isRetryableNetworkError(error: unknown) {
   );
 }
 
+export function classifyRequestError(error: unknown): RequestFailureKind {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "timeout";
+  }
+  if (isRetryableNetworkError(error)) {
+    return "network";
+  }
+  return "unknown";
+}
+
 function isRetryableStatus(status: number) {
   return status === 408 || status === 429 || status >= 500;
 }
 
+function shouldRetryResponse(method: string | undefined, status: number) {
+  if (isRetryableStatus(status)) {
+    return isIdempotentMethod(method) || status >= 502;
+  }
+  return false;
+}
+
+function createTimeoutSignal(timeoutMs: number, parent?: AbortSignal | null) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const cleanup = () => {
+    clearTimeout(timer);
+  };
+
+  if (parent) {
+    if (parent.aborted) {
+      cleanup();
+      controller.abort();
+    } else {
+      parent.addEventListener(
+        "abort",
+        () => {
+          cleanup();
+          controller.abort();
+        },
+        { once: true },
+      );
+    }
+  }
+
+  return { signal: controller.signal, cleanup };
+}
+
 /**
- * fetch wrapper with credentials and automatic retry for transient network
- * failures (e.g. VPN connect/disconnect → ERR_NETWORK_CHANGED).
+ * fetch wrapper with credentials, timeout, and automatic retry for transient
+ * network failures (e.g. VPN connect/disconnect → ERR_NETWORK_CHANGED).
  */
 export async function request(
   input: RequestInfo | URL,
-  init: RequestOptions = {}
+  init: RequestOptions = {},
 ): Promise<Response> {
-  const { retries = 2, retryDelayMs = 500, ...fetchInit } = init;
+  const {
+    retries = DEFAULT_RETRIES,
+    retryDelayMs = DEFAULT_RETRY_DELAY_MS,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    signal: parentSignal,
+    ...fetchInit
+  } = init;
   const maxAttempts = Math.max(1, retries + 1);
-  const idempotent = isIdempotentMethod(fetchInit.method);
   let lastError: unknown;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { signal, cleanup } = createTimeoutSignal(timeoutMs, parentSignal);
+
     try {
       const res = await fetch(input, {
         ...fetchInit,
         credentials: "include",
         headers: fetchInit.headers,
+        signal,
       });
+      cleanup();
 
-      if (
-        idempotent &&
-        attempt < maxAttempts - 1 &&
-        isRetryableStatus(res.status)
-      ) {
+      if (attempt < maxAttempts - 1 && shouldRetryResponse(fetchInit.method, res.status)) {
         await sleep(retryDelayMs * (attempt + 1));
         continue;
       }
 
       return res;
     } catch (error) {
+      cleanup();
       lastError = error;
-      if (
-        idempotent &&
-        attempt < maxAttempts - 1 &&
-        isRetryableNetworkError(error)
-      ) {
+      if (attempt < maxAttempts - 1 && isRetryableNetworkError(error)) {
         await sleep(retryDelayMs * (attempt + 1));
         continue;
       }

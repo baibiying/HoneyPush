@@ -1,0 +1,48 @@
+# Production stack for VPS / 阿里云 ECS (app + PostgreSQL on one machine).
+#
+# Always run with:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+# or: npm run deploy:prod
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: honeypush-postgres
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: honeypush
+    volumes:
+      - honeypush_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d honeypush"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    container_name: honeypush-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    volumes:
+      - ./.env.production:/app/.env.production:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  honeypush_pg_data:

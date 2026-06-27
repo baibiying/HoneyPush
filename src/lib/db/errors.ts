@@ -17,7 +17,13 @@ export function isDatabaseUnavailableError(error: unknown) {
   }
 
   const message = String((error as { message?: string }).message ?? "");
-  return message.includes("ECONNREFUSED") || message.includes("connect ECONNREFUSED");
+  return (
+    message.includes("ECONNREFUSED") ||
+    message.includes("connect ECONNREFUSED") ||
+    message.includes("ETIMEDOUT") ||
+    message.includes("ECONNRESET") ||
+    message.includes("timeout exceeded")
+  );
 }
 
 export function databaseUnavailableResponse() {
