@@ -1,9 +1,11 @@
+import { config } from "dotenv";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { loadEnvFile } from "@/lib/env/load-env-file";
-import { resolveDatabaseUrl } from "@/lib/db/connection-url";
+import { isProductionRuntime, resolveDatabaseUrl } from "@/lib/db/connection-url";
 
-loadEnvFile();
+if (!isProductionRuntime()) {
+  config({ path: ".env" });
+}
 
 const client = postgres(resolveDatabaseUrl(), {
   max: 1,

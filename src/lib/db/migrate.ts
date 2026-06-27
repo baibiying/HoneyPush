@@ -1,11 +1,16 @@
+import { config } from "dotenv";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import path from "path";
 import postgres from "postgres";
-import { loadEnvFile } from "@/lib/env/load-env-file";
-import { resolveMigrationDatabaseUrl } from "@/lib/db/connection-url";
+import {
+  isProductionRuntime,
+  resolveMigrationDatabaseUrl,
+} from "@/lib/db/connection-url";
 
-loadEnvFile();
+if (!isProductionRuntime()) {
+  config({ path: ".env" });
+}
 
 const runMigrate = async () => {
   const client = postgres(resolveMigrationDatabaseUrl(), { max: 1 });

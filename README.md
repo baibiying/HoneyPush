@@ -4,8 +4,6 @@
 **Demo video:** [Bilibili — HoneyPush 督蜜 demo](https://www.bilibili.com/video/BV1FqVh6xEuH/)  
 **Product spec:** [docs/PRODUCT.md](docs/PRODUCT.md)
 
-Users in mainland China may need a VPN to open [https://honeypush.vercel.app/](https://honeypush.vercel.app/) (hosted on Vercel).
-
 ---
 
 ## English
@@ -76,16 +74,7 @@ vercel deploy --prod
 ```
 
 Set `DATABASE_URL` (e.g. Neon) in Vercel. Migrations run via `vercel.json` → `scripts/vercel-build.mjs`.  
-Optional: `CRON_SECRET` for daily digest. `*.vercel.app` may need VPN in mainland China.
-
-### Deploy (Aliyun — better mainland access)
-
-Single lightweight ECS + Docker, ~¥24–60/month. See **[docs/DEPLOY_ALIYUN.md](docs/DEPLOY_ALIYUN.md)**.
-
-```bash
-cp .env.production.example .env.production
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-```
+Optional: `CRON_SECRET` for daily digest.
 
 ### Learn more
 
@@ -161,18 +150,7 @@ vercel deploy --prod
 ```
 
 在 Vercel 配置 `DATABASE_URL`（如 Neon）后部署。构建会通过 `vercel.json` → `scripts/vercel-build.mjs` 自动执行迁移。  
-可选：`CRON_SECRET`（每日提醒）。中国大陆访问 `*.vercel.app` 可能需要 VPN。
-
-### 部署（阿里云，推荐国内访问）
-
-一台轻量服务器 + Docker，月费约 ¥24–60，登录/API 比 Vercel 稳定。
-
-```bash
-cp .env.production.example .env.production   # 改 POSTGRES_PASSWORD、NEXT_PUBLIC_SITE_URL
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-完整步骤见 **[docs/DEPLOY_ALIYUN.md](docs/DEPLOY_ALIYUN.md)**。
+可选：`CRON_SECRET`（每日提醒）。
 
 ### 延伸阅读
 

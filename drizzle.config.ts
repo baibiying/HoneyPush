@@ -1,9 +1,7 @@
 import { config } from "dotenv";
-import { existsSync } from "node:fs";
 import { defineConfig } from "drizzle-kit";
 
-const envFile = [".env.production", ".env"].find((name) => existsSync(name));
-if (envFile) config({ path: envFile });
+config({ path: ".env" });
 
 export default defineConfig({
   schema: "./src/lib/db/schema",
