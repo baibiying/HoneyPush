@@ -1,4 +1,5 @@
-FROM node:22-bookworm-slim AS base
+# DaoCloud mirror avoids docker.io timeout/not-found on Aliyun CN servers.
+FROM docker.m.daocloud.io/library/node:22-bookworm-slim AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 

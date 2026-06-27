@@ -9,7 +9,7 @@
 - [ ] 1. 购买 Ubuntu 轻量服务器（**不要**选 OpenClaw 应用镜像）
 - [ ] 2. 防火墙放行 **22**、**3000**
 - [ ] 3. 能登录服务器（SSH 密钥 或 Workbench）
-- [ ] 4. 安装 Docker
+- [ ] 4. 安装 Docker **并配置镜像加速**（必做，否则拉 `postgres:16` 会超时）
 - [ ] 5. 把代码传到服务器 `~/HoneyPush/`
 - [ ] 6. 配置 `.env.production`
 - [ ] 7. `docker compose ... up -d --build`
@@ -73,7 +73,7 @@ ssh -i ~/Downloads/你的密钥.pem root@<公网IP>
 
 ---
 
-## 4. 安装 Docker
+## 4. 安装 Docker + 镜像加速（必做）
 
 在服务器终端执行：
 
@@ -84,19 +84,62 @@ newgrp docker
 docker compose version
 ```
 
-**拉镜像慢：** 阿里云控制台 → 容器镜像服务 → **镜像加速器**，把地址写入 `/etc/docker/daemon.json`：
+### 4.1 配置阿里云镜像加速
 
-```json
-{
-  "registry-mirrors": ["https://你的加速器地址.mirror.aliyuncs.com"]
-}
-```
+国内服务器**直连 Docker Hub 会超时**（`registry-1.docker.io ... i/o timeout`），必须先配加速器：
 
-然后：
+1. 打开 [容器镜像服务 ACR → 镜像工具 → 镜像加速器](https://cr.console.aliyun.com/cn-hangzhou/instances/mirrors)
+2. 复制你的**专属加速器地址**（形如 `https://xxxxxx.mirror.aliyuncs.com`）
+3. 写入 Docker 配置：
 
 ```bash
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+  "registry-mirrors": [
+    "https://你的加速器地址.mirror.aliyuncs.com"
+  ]
+}
+EOF
+```
+
+把 JSON 里的地址换成控制台复制的真实地址，然后：
+
+```bash
+sudo systemctl daemon-reload
 sudo systemctl restart docker
 ```
+
+### 4.2 验证能否拉镜像
+
+项目默认通过 **DaoCloud 镜像站** 拉 PostgreSQL（见 `docker-compose.prod.yml`），不依赖 Docker Hub 加速器是否同步 `postgres:16`：
+
+```bash
+docker pull docker.m.daocloud.io/library/postgres:16
+```
+
+成功后再部署：
+
+```bash
+npm run deploy:prod
+```
+
+**若报 `not found` 或 `i/o timeout`：**
+
+| 现象 | 处理 |
+|---|---|
+| `docker.io/library/postgres:16: not found` | 阿里云加速器**未生效或地址填错**；勿用文档里的占位 URL，必须换成控制台复制的真实地址 |
+| 仍拉不下来 | 直接用上面 DaoCloud 命令；compose 已默认 `docker.m.daocloud.io/library/postgres:16` |
+| App 构建拉 `node` 失败 | `Dockerfile` 已改用 DaoCloud 的 `node:22-bookworm-slim` |
+
+检查加速器是否配置正确：
+
+```bash
+docker info | grep -A2 "Registry Mirrors"
+cat /etc/docker/daemon.json
+```
+
+> 轻量应用服务器若已预装 Docker，也建议完成 4.1；PostgreSQL/Node 镜像以 compose/Dockerfile 中的 DaoCloud 路径为准。
 
 ---
 
@@ -325,7 +368,9 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 | 页面打不开 | 防火墙加 **TCP 3000**；`docker compose ps` 看 app 是否 Up |
 | 注册/登录失败 | `docker compose logs app` 看数据库报错 |
 | `git clone` GitHub 失败 | 用 rsync / Workbench 上传，或 Gitee 镜像 |
-| Docker build 很慢或失败 | 配镜像加速；内存不足升 2C4G |
+| `registry-1.docker.io ... i/o timeout` | 国内直连 Docker Hub 失败；用 DaoCloud：`docker pull docker.m.daocloud.io/library/postgres:16` |
+| `postgres:16: not found` | 加速器 URL 错误或不同步；compose 已默认 DaoCloud 镜像，先 `git pull`/同步最新代码再部署 |
+| Docker build 很慢或失败 | 镜像加速 + 内存不足可升 2C4G |
 | 改了 `.env.production` 不生效 | `docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build` 重建 app |
 
 ---
