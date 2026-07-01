@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   Plus,
   ScrollText,
+  ShoppingBag,
   Shield,
   X,
 } from "lucide-react";
@@ -45,10 +46,12 @@ type ScheduleGameHubProps = {
   timePanel: ReactNode;
   schedulePanel: ReactNode;
   officerPanel: ReactNode;
+  shopPanel: ReactNode;
   scheduleOverlay?: ReactNode;
   scheduleCalendarHidden?: boolean;
   mapPerformanceDock?: ReactNode;
   performancePanel: ReactNode;
+  mapOnboardingOverlay?: ReactNode;
 };
 
 export type { StationConfig } from "./schedule-stations";
@@ -190,10 +193,12 @@ export function ScheduleGameHub({
   timePanel,
   schedulePanel,
   officerPanel,
+  shopPanel,
   scheduleOverlay,
   scheduleCalendarHidden = false,
   mapPerformanceDock,
   performancePanel,
+  mapOnboardingOverlay,
 }: ScheduleGameHubProps) {
   const { t } = useI18n();
 
@@ -236,6 +241,7 @@ export function ScheduleGameHub({
                     onRequireLogin={onRequireLogin}
                   />
                 </div>
+                {mapOnboardingOverlay}
               </div>
             </div>
           ) : scene === "create" ? (
@@ -274,6 +280,18 @@ export function ScheduleGameHub({
               }
             >
               <div className="h-full min-h-0 overflow-y-auto">{officerPanel}</div>
+            </IslandSceneShell>
+          ) : scene === "shop" ? (
+            <IslandSceneShell
+              title={t("hub.sceneShop")}
+              onBack={() => onSceneChange("map")}
+              icon={
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#1C1917] bg-gradient-to-br from-yellow-400 to-orange-600 text-[#1C1917] shadow-[0_3px_0_#1C1917]">
+                  <ShoppingBag className="h-4 w-4" />
+                </span>
+              }
+            >
+              <div className="h-full min-h-0 overflow-y-auto p-3 sm:p-4">{shopPanel}</div>
             </IslandSceneShell>
           ) : scene === "time" ? (
             <IslandSceneShell

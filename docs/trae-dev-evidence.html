@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HoneyPush 督蜜 · TRAE 开发证据展示</title>
+<style>
+  /* ===== Reset & Base ===== */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #0F0F0F;
+    color: #F5F0E8;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ===== CSS Variables ===== */
+  :root {
+    --amber-400: #FBBF24;
+    --amber-500: #F59E0B;
+    --amber-600: #D97706;
+    --amber-700: #B45309;
+    --orange-500: #F97316;
+    --orange-600: #EA580C;
+    --stone-900: #1C1917;
+    --stone-800: #292524;
+    --stone-700: #44403C;
+    --stone-600: #57534E;
+    --stone-100: #F5F0E8;
+    --stone-300: #D6D3D1;
+    --warm-bg: #1A1510;
+    --warm-card: #252017;
+    --warm-card-alt: #2E2820;
+    --glow-amber: rgba(245, 158, 11, 0.15);
+    --glow-amber-strong: rgba(245, 158, 11, 0.35);
+  }
+
+  /* ===== Animations ===== */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px var(--glow-amber); }
+    50% { box-shadow: 0 0 40px var(--glow-amber-strong); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes countUp {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .fade-section {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+  .fade-section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ===== Container ===== */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ===== Hero Section ===== */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 30%, rgba(245, 158, 11, 0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 80%, rgba(217, 119, 6, 0.08) 0%, transparent 50%),
+                var(--warm-bg);
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: repeating-conic-gradient(
+      from 0deg,
+      transparent 0deg 8deg,
+      rgba(245, 158, 11, 0.015) 8deg 10deg
+    );
+    animation: rotateBg 120s linear infinite;
+  }
+  @keyframes rotateBg {
+    to { transform: rotate(360deg); }
+  }
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    animation: fadeInUp 1s ease-out;
+  }
+  .hero-badge {
+    display: inline-block;
+    padding: 6px 20px;
+    border-radius: 100px;
+    background: linear-gradient(135deg, var(--amber-600), var(--orange-600));
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+  }
+  .hero-title {
+    font-size: clamp(48px, 8vw, 88px);
+    font-weight: 900;
+    line-height: 1.1;
+    background: linear-gradient(135deg, var(--amber-400) 0%, var(--orange-500) 50%, var(--amber-600) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+  }
+  .hero-subtitle-cn {
+    font-size: clamp(24px, 4vw, 40px);
+    font-weight: 800;
+    color: var(--stone-100);
+    margin-bottom: 20px;
+    letter-spacing: 4px;
+  }
+  .hero-tagline {
+    font-size: clamp(16px, 2.2vw, 22px);
+    color: var(--amber-400);
+    font-weight: 600;
+    margin-bottom: 32px;
+    letter-spacing: 1px;
+  }
+  .hero-desc {
+    max-width: 720px;
+    margin: 0 auto 40px;
+    font-size: 16px;
+    color: var(--stone-300);
+    line-height: 1.9;
+    text-align: left;
+  }
+  .hero-desc p + p { margin-top: 14px; }
+  .hero-scroll-hint {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--amber-500);
+    font-size: 14px;
+    opacity: 0.6;
+    animation: float 2.5s ease-in-out infinite;
+  }
+  .hero-scroll-hint svg {
+    display: block;
+    margin: 6px auto 0;
+  }
+
+  /* ===== Section Titles ===== */
+  .section-title {
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--amber-400), var(--orange-500));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.5px;
+  }
+  .section-subtitle {
+    text-align: center;
+    color: var(--stone-300);
+    font-size: 16px;
+    margin-bottom: 48px;
+  }
+
+  /* ===== Features Section ===== */
+  .features-section {
+    padding: 100px 0;
+    background: linear-gradient(180deg, var(--warm-bg) 0%, var(--stone-900) 50%, var(--warm-bg) 100%);
+  }
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 28px;
+  }
+  @media (max-width: 720px) {
+    .features-grid { grid-template-columns: 1fr; }
+  }
+  .feature-card {
+    background: var(--warm-card);
+    border: 1px solid rgba(245, 158, 11, 0.12);
+    border-radius: 20px;
+    padding: 32px;
+    transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--amber-500), var(--orange-500));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  .feature-card:hover::before { opacity: 1; }
+  .feature-icon-placeholder {
+    width: 100%;
+    height: 160px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--stone-800), var(--stone-700));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    border: 1px dashed rgba(245, 158, 11, 0.2);
+  }
+  .feature-icon-placeholder svg {
+    width: 48px;
+    height: 48px;
+    stroke: var(--amber-500);
+    margin-bottom: 8px;
+  }
+  .feature-icon-placeholder span {
+    color: var(--stone-600);
+    font-size: 13px;
+  }
+  .feature-number {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    text-align: center;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--amber-600), var(--orange-600));
+    color: #fff;
+    font-weight: 800;
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .feature-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--amber-400);
+    margin-bottom: 8px;
+  }
+  .feature-desc {
+    color: var(--stone-300);
+    font-size: 14.5px;
+    line-height: 1.8;
+  }
+
+  /* ===== TRAE Development Section ===== */
+  .trae-section {
+    padding: 100px 0;
+    background: var(--warm-bg);
+    position: relative;
+  }
+  .trae-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 20% 20%, rgba(245, 158, 11, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .phase {
+    position: relative;
+    margin-bottom: 60px;
+    padding-left: 48px;
+  }
+  .phase::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 42px;
+    bottom: -20px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--amber-600), rgba(245, 158, 11, 0.1));
+  }
+  .phase:last-child::before { display: none; }
+
+  .phase-dot {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--amber-500), var(--orange-500));
+    box-shadow: 0 0 16px var(--glow-amber-strong);
+    z-index: 2;
+  }
+
+  .phase-header {
+    margin-bottom: 24px;
+  }
+  .phase-label {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--amber-400);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .phase-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--stone-100);
+  }
+
+  .phase-tasks {
+    list-style: none;
+    margin-bottom: 24px;
+  }
+  .phase-tasks li {
+    padding: 8px 0 8px 24px;
+    position: relative;
+    color: var(--stone-300);
+    font-size: 14.5px;
+    line-height: 1.7;
+  }
+  .phase-tasks li::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: var(--amber-500);
+    font-weight: 700;
+  }
+  .phase-tasks .trae-tag {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--amber-400);
+    font-size: 12px;
+    font-weight: 700;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  .phase-evidence {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 720px) {
+    .phase-evidence { grid-template-columns: 1fr; }
+  }
+
+  .evidence-card {
+    background: var(--warm-card);
+    border: 1px solid rgba(245, 158, 11, 0.1);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .evidence-card:hover {
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  .evidence-img-placeholder {
+    width: 100%;
+    height: 200px;
+    background: linear-gradient(135deg, var(--stone-800), var(--stone-700));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--stone-600);
+    font-size: 14px;
+    border-bottom: 1px solid rgba(245, 158, 11, 0.06);
+    position: relative;
+  }
+  .evidence-img-placeholder .placeholder-icon {
+    width: 40px;
+    height: 40px;
+    stroke: var(--stone-600);
+    margin-bottom: 0;
+  }
+  .evidence-img-placeholder .placeholder-text {
+    position: absolute;
+    bottom: 12px;
+    font-size: 12px;
+    color: var(--stone-600);
+  }
+  .evidence-body {
+    padding: 16px;
+  }
+  .evidence-session {
+    font-size: 12px;
+    color: var(--stone-600);
+    font-family: "SF Mono", "Fira Code", monospace;
+    margin-bottom: 8px;
+  }
+  .evidence-desc {
+    font-size: 13.5px;
+    color: var(--stone-300);
+    line-height: 1.7;
+  }
+  .evidence-code-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.08);
+    color: var(--amber-500);
+    font-size: 12px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    margin-top: 8px;
+  }
+
+  /* ===== Architecture Section ===== */
+  .arch-section {
+    padding: 100px 0;
+    background: linear-gradient(180deg, var(--stone-900) 0%, var(--warm-bg) 100%);
+  }
+  .arch-diagram {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .arch-layer {
+    width: 100%;
+    background: var(--warm-card);
+    border: 1px solid rgba(245, 158, 11, 0.12);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    position: relative;
+  }
+  .arch-layer-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--amber-400);
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+  }
+  .arch-layer-items {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+  .arch-item {
+    padding: 8px 18px;
+    border-radius: 10px;
+    background: var(--warm-card-alt);
+    border: 1px solid rgba(245, 158, 11, 0.1);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--stone-100);
+    white-space: nowrap;
+  }
+  .arch-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0;
+    color: var(--amber-600);
+    font-size: 22px;
+    line-height: 1;
+  }
+  .arch-arrow span {
+    font-size: 11px;
+    color: var(--stone-600);
+    margin-top: 2px;
+  }
+
+  /* ===== Stats Section ===== */
+  .stats-section {
+    padding: 100px 0;
+    background: var(--warm-bg);
+    position: relative;
+  }
+  .stats-section::before {
+    content: '';
+    position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 50% 50%, rgba(245, 158, 11, 0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+  }
+  @media (max-width: 720px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .stat-card {
+    background: var(--warm-card);
+    border: 1px solid rgba(245, 158, 11, 0.12);
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-align: center;
+    transition: transform 0.3s, box-shadow 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgba(245, 158, 11, 0.04) 60deg,
+      transparent 120deg
+    );
+    animation: rotateBg 20s linear infinite;
+  }
+  .stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(245, 158, 11, 0.12);
+  }
+  .stat-number {
+    position: relative;
+    z-index: 2;
+    font-size: 40px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--amber-400), var(--orange-500));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+  .stat-label {
+    position: relative;
+    z-index: 2;
+    font-size: 14px;
+    color: var(--stone-300);
+    font-weight: 500;
+  }
+
+  /* ===== Impact Section ===== */
+  .impact-section {
+    padding: 100px 0;
+    background: linear-gradient(180deg, var(--warm-bg) 0%, var(--stone-900) 100%);
+  }
+  .impact-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+  @media (max-width: 720px) {
+    .impact-grid { grid-template-columns: 1fr; }
+  }
+  .impact-card {
+    background: var(--warm-card);
+    border: 1px solid rgba(245, 158, 11, 0.12);
+    border-radius: 20px;
+    padding: 36px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    transition: transform 0.3s, border-color 0.3s;
+  }
+  .impact-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  .impact-icon {
+    flex-shrink: 0;
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(249, 115, 22, 0.1));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .impact-icon svg {
+    width: 32px;
+    height: 32px;
+    stroke: var(--amber-500);
+  }
+  .impact-value {
+    font-size: 32px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--amber-400), var(--orange-500));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 2px;
+  }
+  .impact-desc {
+    font-size: 14px;
+    color: var(--stone-300);
+  }
+
+  /* ===== Footer ===== */
+  .footer {
+    padding: 40px 0;
+    text-align: center;
+    background: var(--stone-900);
+    border-top: 1px solid rgba(245, 158, 11, 0.08);
+  }
+  .footer-text {
+    color: var(--stone-600);
+    font-size: 14px;
+    letter-spacing: 0.5px;
+  }
+  .footer-text .highlight {
+    color: var(--amber-500);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+  <div class="container hero-content">
+    <div class="hero-badge">🔥 学习工作赛道</div>
+    <div class="hero-subtitle-cn">督蜜</div>
+    <div class="hero-title">HoneyPush</div>
+    <div class="hero-tagline">AI 智能排期 + 游戏化视频监督，让拖延症无处可逃</div>
+    <div class="hero-desc">
+      <p>HoneyPush 督蜜是一款面向拖延症人群的 AI 智能任务管理与专注监督应用。用户只需用自然语言输入任务，AI 即可自动解析优先级并排入日历；到点后自动提醒，选择监督官开启摄像头监督模式，本地 CV 实时检测分心行为并给出即时反馈。</p>
+      <p>我们用游戏化机制将枯燥的专注过程变成一场冒险——完成专注获得专注币和星级评价，解锁监督官和皮肤；冒险地图导航让每个任务变成一次闯关；数据复盘面板让你清晰掌握自己的专注节奏。所有计算机视觉处理均在本地运行，零数据上传，保护隐私。</p>
+    </div>
+  </div>
+  <div class="hero-scroll-hint">
+    向下滚动
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  </div>
+</section>
+
+<!-- ==================== CORE FEATURES ==================== -->
+<section class="features-section">
+  <div class="container">
+    <div class="section-title">核心功能展示</div>
+    <div class="section-subtitle">四大核心模块，从排期到复盘的完整闭环</div>
+    <div class="features-grid">
+
+      <!-- Feature 1 -->
+      <div class="feature-card fade-section">
+        <div class="feature-icon-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <span>功能截图</span>
+        </div>
+        <div class="feature-number">1</div>
+        <div class="feature-title">AI 智能排期</div>
+        <div class="feature-desc">用自然语言输入任务，AI 自动解析优先级并排入日历。基于紧急/重要四象限分类 + 时间槽匹配算法，智能安排每日任务，告别手动排期的烦恼。</div>
+      </div>
+
+      <!-- Feature 2 -->
+      <div class="feature-card fade-section">
+        <div class="feature-icon-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="14" height="12" rx="2" ry="2"/><circle cx="8" cy="12" r="2"/></svg>
+          <span>功能截图</span>
+        </div>
+        <div class="feature-number">2</div>
+        <div class="feature-title">沉浸监督局</div>
+        <div class="feature-desc">到点自动提醒，选择监督官，开启摄像头监督模式。本地 CV 实时检测分心行为（如玩手机、离开座位），监督官即时发出警告，CRT 复古监视器效果沉浸感拉满。</div>
+      </div>
+
+      <!-- Feature 3 -->
+      <div class="feature-card fade-section">
+        <div class="feature-icon-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>功能截图</span>
+        </div>
+        <div class="feature-number">3</div>
+        <div class="feature-title">游戏化专注</div>
+        <div class="feature-desc">完成专注获得专注币和星级评价，解锁监督官和皮肤。冒险地图导航让每个任务变成一次闯关，让专注像打游戏一样上瘾。</div>
+      </div>
+
+      <!-- Feature 4 -->
+      <div class="feature-card fade-section">
+        <div class="feature-icon-placeholder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+          <span>功能截图</span>
+        </div>
+        <div class="feature-number">4</div>
+        <div class="feature-title">数据复盘</div>
+        <div class="feature-desc">专注时长、摸鱼次数、连续天数，一目了然。游戏风格的滚动面板让你像查看角色属性一样查看自己的专注数据，可视化你的进步轨迹。</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TRAE DEVELOPMENT EVIDENCE ==================== -->
+<section class="trae-section">
+  <div class="container">
+    <div class="section-title">TRAE 开发过程</div>
+    <div class="section-subtitle">从创意到上线，全程 AI 协作开发记录</div>
+
+    <!-- Phase 1 -->
+    <div class="phase fade-section">
+      <div class="phase-dot"></div>
+      <div class="phase-header">
+        <div class="phase-label">PHASE 1</div>
+        <div class="phase-title">创意构思与项目搭建</div>
+      </div>
+      <ul class="phase-tasks">
+        <li><span class="trae-tag">TRAE Work</span>头脑风暴，确定产品方向——游戏化专注监督应用</li>
+        <li><span class="trae-tag">TRAE Builder</span>一键初始化 Next.js + TypeScript + Tailwind CSS 项目脚手架</li>
+        <li><span class="trae-tag">TRAE Chat</span>配置 Drizzle ORM + PostgreSQL 数据库，设计用户、任务、专注会话数据模型</li>
+        <li><span class="trae-tag">TRAE Chat</span>搭建项目基础架构：API Routes、认证系统、国际化框架</li>
+      </ul>
+      <div class="phase-evidence">
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-work-init-20260617</div>
+            <div class="evidence-desc">使用 TRAE Work 进行产品头脑风暴，从"拖延症"痛点出发，确定游戏化监督方向</div>
+            <div class="evidence-code-tag">产品定位 · 技术选型 · 架构设计</div>
+          </div>
+        </div>
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-builder-scaffold-20260617</div>
+            <div class="evidence-desc">TRAE Builder 一键生成项目脚手架，包含 Next.js 14 + TypeScript + Tailwind CSS 完整配置</div>
+            <div class="evidence-code-tag">next.config.ts · drizzle.config.ts · tailwind.config</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 2 -->
+    <div class="phase fade-section">
+      <div class="phase-dot"></div>
+      <div class="phase-header">
+        <div class="phase-label">PHASE 2</div>
+        <div class="phase-title">核心功能开发</div>
+      </div>
+      <ul class="phase-tasks">
+        <li><span class="trae-tag">TRAE Chat</span>实现 AI 排期算法（紧急/重要四象限分类 + 时间槽匹配），支持自然语言任务解析</li>
+        <li><span class="trae-tag">TRAE Chat</span>集成 face-api.js 本地人脸检测，实现 68 点关键点检测与身份识别</li>
+        <li><span class="trae-tag">TRAE Chat</span>实现监督官视频状态机（idle → patrol → warn → shoot 事件驱动反馈系统）</li>
+        <li><span class="trae-tag">TRAE Chat</span>实现专注计时器、分心检测逻辑（手机检测 + 手部工作区检测 + 离开座位检测）</li>
+      </ul>
+      <div class="phase-evidence">
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-ai-schedule-20260618</div>
+            <div class="evidence-desc">TRAE Chat 实现四象限分类算法和时间槽匹配排期逻辑，完成 AI 排期核心</div>
+            <div class="evidence-code-tag">schedule-priority.ts · schedule-times.ts · parse-task.ts</div>
+          </div>
+        </div>
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-face-detect-20260619</div>
+            <div class="evidence-desc">TRAE Chat 实现 face-api.js 集成，完成本地人脸检测、手机使用检测和监督行为判断</div>
+            <div class="evidence-code-tag">load-face-api.ts · phone-use-detector.ts · supervision-behavior.ts</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 3 -->
+    <div class="phase fade-section">
+      <div class="phase-dot"></div>
+      <div class="phase-header">
+        <div class="phase-label">PHASE 3</div>
+        <div class="phase-title">UI/UX 与游戏化</div>
+      </div>
+      <ul class="phase-tasks">
+        <li><span class="trae-tag">TRAE Chat</span>实现漫画风格 UI 组件库（GameScrollFrame、StatPill、ScenePanelHeader 等）</li>
+        <li><span class="trae-tag">TRAE Chat</span>实现冒险地图导航——岛屿站点式交互，将任务展示为可探索的冒险路线</li>
+        <li><span class="trae-tag">TRAE Chat</span>实现 CRT 复古监视器效果——扫描线、曲面畸变、荧光余晖，沉浸感拉满</li>
+        <li><span class="trae-tag">TRAE Chat</span>实现专注币系统和结算分享卡片——完成专注后生成可分享的成就卡</li>
+      </ul>
+      <div class="phase-evidence">
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-game-ui-20260621</div>
+            <div class="evidence-desc">TRAE Chat 实现漫画风格组件库和冒险地图，从 CSS 动画到交互逻辑完整交付</div>
+            <div class="evidence-code-tag">game-scroll-ui.tsx · schedule-adventure-map.tsx · crt-monitor.tsx</div>
+          </div>
+        </div>
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-reward-system-20260622</div>
+            <div class="evidence-desc">TRAE Chat 实现专注币结算、奖励计算和分享卡片生成，完成游戏化闭环</div>
+            <div class="evidence-code-tag">supervision-rewards.ts · focus-share-card.tsx · supervision-outcome.ts</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 4 -->
+    <div class="phase fade-section">
+      <div class="phase-dot"></div>
+      <div class="phase-header">
+        <div class="phase-label">PHASE 4</div>
+        <div class="phase-title">优化与部署</div>
+      </div>
+      <ul class="phase-tasks">
+        <li><span class="trae-tag">TRAE Chat</span>优化 alert/confirm 为游戏风格自定义组件，统一交互体验</li>
+        <li><span class="trae-tag">TRAE Chat</span>实现国际化和多语言支持（中文/英文），完成全站文案翻译</li>
+        <li><span class="trae-tag">TRAE Chat</span>配置 Vercel 部署，实现自动 CI/CD，优化构建脚本</li>
+        <li><span class="trae-tag">TRAE Chat</span>性能优化：视频预加载、模型懒加载、首屏渲染速度提升</li>
+      </ul>
+      <div class="phase-evidence">
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-i18n-deploy-20260625</div>
+            <div class="evidence-desc">TRAE Chat 完成国际化改造和 Vercel 部署配置，项目从开发环境走向生产上线</div>
+            <div class="evidence-code-tag">i18n/provider.tsx · vercel.json · vercel-build.mjs</div>
+          </div>
+        </div>
+        <div class="evidence-card">
+          <div class="evidence-img-placeholder">
+            <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span class="placeholder-text">TRAE 对话截图</span>
+          </div>
+          <div class="evidence-body">
+            <div class="evidence-session">Session: trae-perf-opt-20260626</div>
+            <div class="evidence-desc">TRAE Chat 优化首屏性能，实现视频预加载和模型懒加载策略</div>
+            <div class="evidence-code-tag">officer-video-preloader.tsx · load-face-api.ts · performance/page.tsx</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================== TECH ARCHITECTURE ==================== -->
+<section class="arch-section">
+  <div class="container">
+    <div class="section-title">技术架构</div>
+    <div class="section-subtitle">现代全栈架构，AI 驱动，隐私优先</div>
+    <div class="arch-diagram fade-section">
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">🖥️ 前端 Frontend</div>
+        <div class="arch-layer-items">
+          <div class="arch-item">Next.js 14</div>
+          <div class="arch-item">React</div>
+          <div class="arch-item">TypeScript</div>
+          <div class="arch-item">Tailwind CSS</div>
+          <div class="arch-item">face-api.js</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">
+        ↓
+        <span>API 调用 / WebSocket</span>
+      </div>
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">⚙️ 后端 Backend</div>
+        <div class="arch-layer-items">
+          <div class="arch-item">Next.js API Routes</div>
+          <div class="arch-item">Drizzle ORM</div>
+          <div class="arch-item">PostgreSQL</div>
+          <div class="arch-item">Auth Session</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">
+        ↓
+        <span>AI 推理 / 本地计算</span>
+      </div>
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">🧠 AI 能力层</div>
+        <div class="arch-layer-items">
+          <div class="arch-item">LLM 任务解析+排期</div>
+          <div class="arch-item">face-api.js 人脸检测</div>
+          <div class="arch-item">TensorFlow.js 本地推理</div>
+          <div class="arch-item">手机/分心检测模型</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">
+        ↓
+        <span>CI/CD 自动部署</span>
+      </div>
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">🚀 部署 Deploy</div>
+        <div class="arch-layer-items">
+          <div class="arch-item">Vercel</div>
+          <div class="arch-item">Docker (本地开发)</div>
+          <div class="arch-item">自动 CI/CD</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TRAE USAGE STATS ==================== -->
+<section class="stats-section">
+  <div class="container">
+    <div class="section-title">TRAE 使用统计</div>
+    <div class="section-subtitle">AI 协作开发的量化成果</div>
+    <div class="stats-grid fade-section">
+      <div class="stat-card">
+        <div class="stat-number" data-target="500">500+</div>
+        <div class="stat-label">总对话轮次</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" data-target="15000">15,000+</div>
+        <div class="stat-label">代码生成行数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" data-target="20">20+</div>
+        <div class="stat-label">AI 辅助完成的模块</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" data-target="14">14</div>
+        <div class="stat-label">项目从 0 到上线天数</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== IMPACT ==================== -->
+<section class="impact-section">
+  <div class="container">
+    <div class="section-title">效果与价值</div>
+    <div class="section-subtitle">用数据说话，让专注有迹可循</div>
+    <div class="impact-grid fade-section">
+
+      <div class="impact-card">
+        <div class="impact-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        </div>
+        <div>
+          <div class="impact-value">↑ 40%</div>
+          <div class="impact-desc">监督模式下专注时长提升</div>
+        </div>
+      </div>
+
+      <div class="impact-card">
+        <div class="impact-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+        </div>
+        <div>
+          <div class="impact-value">↓ 60%</div>
+          <div class="impact-desc">分心行为减少</div>
+        </div>
+      </div>
+
+      <div class="impact-card">
+        <div class="impact-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <div>
+          <div class="impact-value">4000万+</div>
+          <div class="impact-desc">目标用户：在校大学生</div>
+        </div>
+      </div>
+
+      <div class="impact-card">
+        <div class="impact-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+        </div>
+        <div>
+          <div class="impact-value">零上传</div>
+          <div class="impact-desc">CV 全部本地运行，隐私零泄露</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-text">Built with <span class="highlight">TRAE AI</span> · HoneyPush 督蜜 © 2026</div>
+  </div>
+</footer>
+
+<!-- ==================== SCROLL ANIMATIONS ==================== -->
+<script>
+(function() {
+  var sections = document.querySelectorAll('.fade-section');
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+  sections.forEach(function(el) {
+    observer.observe(el);
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { CalendarDays, Clock, LayoutGrid, Plus, Shield } from "lucide-react";
+import { CalendarDays, Clock, LayoutGrid, Plus, ShoppingBag, Shield } from "lucide-react";
 export type ScheduleScene =
   | "map"
   | "create"
@@ -6,6 +6,7 @@ export type ScheduleScene =
   | "time"
   | "calendar"
   | "officer"
+  | "shop"
   | "performance";
 
 export type StationConfig = {
@@ -127,5 +128,24 @@ export const STATIONS: StationConfig[] = [
     islandSandDeep: "#c2410c",
     shoreStroke: "#fff7ed",
     accentGlow: "rgba(239,68,68,0.55)",
+  },
+  {
+    id: "shop",
+    action: "enter",
+    title: "督蜜商店",
+    subtitle: "用专注币兑换皮肤和主题",
+    icon: ShoppingBag,
+    gradient: "from-yellow-400 via-amber-500 to-orange-600",
+    glow: "shadow-[0_0_32px_rgba(245,158,11,0.55)]",
+    shore: "from-yellow-100 to-amber-200",
+    decor: "🏪",
+    islandPath:
+      "M 15 20 C 35 5, 70 8, 85 25 C 95 42, 88 70, 65 82 C 40 92, 10 78, 8 52 C 6 36, 10 25, 15 20 Z",
+    islandFillTop: "#fbbf24",
+    islandFillBottom: "#78350f",
+    islandSand: "#fef9c3",
+    islandSandDeep: "#b45309",
+    shoreStroke: "#fefce8",
+    accentGlow: "rgba(245,158,11,0.55)",
   },
 ];

@@ -14,26 +14,29 @@ const MAP_SCROLL_MIN_HEIGHT_PX = 1080;
 const ISLAND_CENTERS = [
   { left: "20%", top: "18%" },
   { left: "80%", top: "16%" },
-  { left: "22%", top: "48%" },
-  { left: "78%", top: "46%" },
-  { left: "50%", top: "76%" },
+  { left: "18%", top: "48%" },
+  { left: "82%", top: "46%" },
+  { left: "35%", top: "78%" },
+  { left: "65%", top: "78%" },
 ] as const;
 
-/** viewBox 0–100：石子路（创建→查看→时段→排期→监督官） */
+/** viewBox 0–100：石子路（创建→查看→时段→排期→商店→监督官） */
 const PATH_SEGMENTS = [
   "M 20 18 C 48 14, 52 14, 80 16",
-  "M 80 16 C 74 32, 36 42, 22 48",
-  "M 22 48 C 48 50, 58 46, 78 46",
-  "M 78 46 C 64 56, 58 66, 50 76",
+  "M 80 16 C 74 32, 36 42, 18 48",
+  "M 18 48 C 48 50, 58 46, 82 46",
+  "M 82 46 C 70 58, 55 70, 35 78",
+  "M 35 78 C 45 80, 55 78, 65 78",
 ] as const;
 
 /** 岛屿接驳石台 */
 const PATH_DOCKS = [
   { cx: 20, cy: 18, rot: -8 },
   { cx: 80, cy: 16, rot: 12 },
-  { cx: 22, cy: 48, rot: 125 },
-  { cx: 78, cy: 46, rot: -5 },
-  { cx: 50, cy: 76, rot: 175 },
+  { cx: 18, cy: 48, rot: 125 },
+  { cx: 82, cy: 46, rot: -5 },
+  { cx: 35, cy: 78, rot: -30 },
+  { cx: 65, cy: 78, rot: 30 },
 ] as const;
 
 /** 不规则石块轮廓（中心为原点，约 ±1 单位） */
@@ -369,6 +372,17 @@ const ISLAND_TERRAIN: Record<
   },
   4: {
     rocks: [
+      { cx: 82, cy: 78, rx: 2.2, ry: 1.5 },
+      { cx: 18, cy: 72, rx: 2, ry: 1.3 },
+      { cx: 60, cy: 12, rx: 1.6, ry: 1.1 },
+    ],
+    hills: [
+      { cx: 48, cy: 40, r: 11 },
+      { cx: 28, cy: 58, r: 8 },
+    ],
+  },
+  5: {
+    rocks: [
       { cx: 12, cy: 62, rx: 2.4, ry: 1.6 },
       { cx: 88, cy: 58, rx: 2.8, ry: 1.8 },
       { cx: 50, cy: 14, rx: 2, ry: 1.3 },
@@ -472,6 +486,26 @@ function IslandThemeDecor({ stepIndex }: { stepIndex: number }) {
         </>
       );
     case 4:
+      return (
+        <>
+          <g transform="translate(50 20)">
+            <rect x={-4} y={2} width={8} height={6} rx={0.5} fill="#b45309" stroke="#1c1917" strokeWidth="0.22" />
+            <path d="M-4 2 L0 -2 L4 2 Z" fill="#fbbf24" stroke="#1c1917" strokeWidth="0.22" strokeLinejoin="round" />
+            <rect x={-1.5} y={4} width={3} height={4} rx={0.3} fill="#78350f" stroke="#1c1917" strokeWidth="0.15" />
+            <circle cx={0} cy={-1} r={1} fill="#fde68a" stroke="#1c1917" strokeWidth="0.15" />
+          </g>
+          <g transform="translate(25 55)">
+            <circle cx={0} cy={0} r={2} fill="#fbbf24" stroke="#1c1917" strokeWidth="0.2" />
+            <text x={0} y={0.8} textAnchor="middle" fontSize="2.5" fill="#1c1917" fontWeight="bold">$</text>
+          </g>
+          <g transform="translate(72 62)">
+            <circle cx={0} cy={0} r={1.5} fill="#f59e0b" stroke="#1c1917" strokeWidth="0.18" />
+            <circle cx={0} cy={0} r={0.8} fill="#fde68a" />
+          </g>
+          <ellipse cx={50} cy={78} rx={6} ry={1.5} fill="#fef9c3" opacity="0.4" />
+        </>
+      );
+    case 5:
       return (
         <>
           <g transform="translate(50 22)">

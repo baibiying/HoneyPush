@@ -32,6 +32,7 @@ import { usePerformanceReport } from "@/hooks/use-performance-report";
 import { ScheduleGameHub, type ScheduleScene } from "./schedule-game-hub";
 import { MapPerformanceDock } from "./map-performance-dock";
 import { ScheduleOfficerPanel } from "./schedule-officer-panel";
+import { ShopPanel } from "../shop/shop-panel";
 import {
   PREFERRED_OFFICER_CHANGED_EVENT,
   readPreferredOfficer,
@@ -39,6 +40,7 @@ import {
 import type { OfficerId } from "@/lib/officers-data";
 import { SchedulePromptOverlay } from "./schedule-prompt-overlay";
 import { ScheduleUnscheduledNotice } from "./schedule-unscheduled-notice";
+import { OnboardingOverlay } from "./onboarding-overlay";
 import {
   AvailabilityEditor,
   toAvailabilityRows,
@@ -267,6 +269,12 @@ export function ScheduleScreen() {
         label: t("quest.officer"),
         done: preferredOfficerId !== null,
         scene: "officer" as const,
+      },
+      {
+        id: "shop",
+        label: t("quest.shop"),
+        done: false,
+        scene: "shop" as const,
       },
     ],
     [stats.total, validAvailabilityCount, scheduledCount, preferredOfficerId, t],
@@ -854,6 +862,12 @@ export function ScheduleScreen() {
             onSelected={setPreferredOfficerId}
             onRequireLogin={promptLogin}
           />
+        }
+        shopPanel={
+          <ShopPanel />
+        }
+        mapOnboardingOverlay={
+          <OnboardingOverlay onSceneChange={setScene} />
         }
         mapPerformanceDock={
           <MapPerformanceDock

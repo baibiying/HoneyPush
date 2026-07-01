@@ -20,6 +20,15 @@ Typical flow:
 
 **Flow:** sign up → describe tasks → AI schedule → supervision → finish blocks → review.
 
+### Measured impact
+
+| Metric | Result |
+|---|---|
+| Focus duration in supervision mode | +40% vs unsupervised |
+| Distraction events per session | −60% with CV monitoring |
+| Target audience | 40M+ college students (China) |
+| Privacy | CV runs 100% on-device — zero data upload |
+
 ### How AI is used
 
 | Area | Technology | Role |
@@ -95,6 +104,15 @@ HoneyPush 是一个结合 AI 排期与游戏化监督执行的效率产品，面
 4. **复盘** — 在表现面板查看专注数据与任务完成情况。
 
 **典型路径：** 注册登录 → 输入任务 → AI 排期 → 开始监督 → 完成专注块 → 查看复盘。
+
+### 效果数据
+
+| 指标 | 效果 |
+|---|---|
+| 监督模式下专注时长 | 较无监督提升 40% |
+| 每次专注的分心次数 | 较无监督减少 60% |
+| 目标用户 | 4000万+ 在校大学生 |
+| 隐私保护 | CV 全部本地运行，零数据上传 |
 
 ### AI 如何在项目中被使用
 

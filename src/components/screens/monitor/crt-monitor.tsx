@@ -1121,11 +1121,49 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
               <p className="mt-2 text-sm sm:text-base text-stone-300 leading-relaxed">
                 {t("monitor.crt.cameraPlacementWhy")}
               </p>
-              <p className="mt-3 text-sm font-mono text-cyan-200/90">
-                {modelLoadStage
-                  ? t(`monitor.crt.modelLoadStage_${modelLoadStage}`)
-                  : t("monitor.crt.statusLoading")}
-              </p>
+              {/* Retro pixel progress bar */}
+              {(() => {
+                const stageProgress: Record<FaceApiLoadStage, number> = {
+                  import: 5,
+                  backend: 20,
+                  detector: 40,
+                  landmarks: 60,
+                  recognition: 85,
+                };
+                const pct = modelLoadStage ? stageProgress[modelLoadStage] : 0;
+                return (
+                  <div className="mt-4">
+                    <p className="text-xs sm:text-sm font-mono text-cyan-200/90 mb-2">
+                      {t("monitor.crt.modelLoadProgress")}
+                    </p>
+                    <div className="w-full h-4 sm:h-5 bg-stone-800 border-2 border-stone-600 relative overflow-hidden"
+                      style={{ imageRendering: "pixelated" }}>
+                      {/* Pixel-segmented fill */}
+                      <div
+                        className="h-full transition-all duration-500 ease-out"
+                        style={{
+                          width: `${pct}%`,
+                          background:
+                            "repeating-linear-gradient(90deg,#22d3ee 0px,#22d3ee 8px,#0e7490 8px,#0e7490 10px)",
+                        }}
+                      />
+                      {/* Scanline overlay */}
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background:
+                            "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.15) 2px,rgba(0,0,0,0.15) 4px)",
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[10px] sm:text-xs font-mono text-cyan-200/90">
+                      {modelLoadStage
+                        ? t(`monitor.crt.modelLoadStage_${modelLoadStage}`)
+                        : t("monitor.crt.statusLoading")}
+                    </p>
+                  </div>
+                );
+              })()}
               {modelLoadSlow && (
                 <p className="mt-2 text-xs text-amber-200/90 leading-relaxed">
                   {t("monitor.crt.modelLoadSlowHint")}
