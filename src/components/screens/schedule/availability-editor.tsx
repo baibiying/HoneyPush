@@ -384,10 +384,12 @@ function GameAvailabilityEditor({
 
   const displayGroups = useMemo(() => {
     const pending = extraDates
-      .filter((date) => !datesWithSlots.has(date))
+      .filter((date) => !datesWithSlots.has(date) && date >= today)
       .map((date) => ({ date, slots: [] as AvailabilitySlotRow[] }));
 
-    const merged = [...dayGroups, ...pending].sort((a, b) => a.date.localeCompare(b.date));
+    const merged = [...dayGroups, ...pending]
+      .filter((g) => g.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date));
     if (merged.length > 0) return merged;
     return [{ date: today, slots: [] as AvailabilitySlotRow[] }];
   }, [dayGroups, extraDates, datesWithSlots, today]);

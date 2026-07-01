@@ -22,6 +22,7 @@ export const enMessages: Messages = {
     operationFailed: "Operation failed. Try again later.",
     confirmDeleteTask: "Delete this task?",
     cancel: "Cancel",
+    delete: "Delete",
   },
   dock: {
     basePassPart1: "Base",
@@ -501,5 +502,20 @@ export const enMessages: Messages = {
     previewClose: "Close",
     previewCloseOverlay: "Close preview",
     previewLoadFailed: "Preview failed to load. Try again later.",
+  },
+  shareCard: {
+    tagline: "AI Scheduling · Gamified Supervision",
+    cleared: "CLEARED",
+    mission: "MISSION",
+    focusTime: "Focus Time",
+    minutes: "min",
+    stars: "Stars",
+    slacking: "Slacking",
+    times: "x",
+    coins: "Coins",
+    officer: "Officer",
+    footer: "Focus · Execution · Drive",
+    saveImage: "Save Image",
+    saved: "Saved",
   },
 };

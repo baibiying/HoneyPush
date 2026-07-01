@@ -20,6 +20,7 @@ export const zhMessages = {
     operationFailed: "操作失败，请稍后重试",
     confirmDeleteTask: "确定删除这个任务吗？",
     cancel: "取消",
+    delete: "删除",
   },
   dock: {
     basePassPart1: "基地",
@@ -491,6 +492,21 @@ export const zhMessages = {
     previewClose: "关闭",
     previewCloseOverlay: "关闭预览",
     previewLoadFailed: "预览加载失败，请稍后重试",
+  },
+  shareCard: {
+    tagline: "AI 智能排期 · 游戏化监督",
+    cleared: "通关",
+    mission: "任务",
+    focusTime: "专注时长",
+    minutes: "分钟",
+    stars: "获得星星",
+    slacking: "摸鱼次数",
+    times: "次",
+    coins: "专注币",
+    officer: "监督官",
+    footer: "专注力 · 执行力 · 自驱力",
+    saveImage: "保存图片",
+    saved: "已保存",
   },
 };
 

@@ -70,6 +70,7 @@ import type {
   TrackerDetectionStatus,
 } from "@/lib/face-tracking/types";
 import { useI18n } from "@/i18n/i18n-provider";
+import { toast } from "sonner";
 import {
   translateDistractionOrHint,
   translatePoseHint,
@@ -735,7 +736,7 @@ export const CrtMonitor = forwardRef<CrtMonitorHandle, CrtMonitorProps>(function
       const ok = await loadFaceApi();
       if (ok) applyFaceModelReady();
     } catch (error) {
-      alert(
+      toast.error(
         t("monitor.crt.cameraFailAlert", {
           message: error instanceof Error ? error.message : t("monitor.crt.cameraFailUnknown"),
         })

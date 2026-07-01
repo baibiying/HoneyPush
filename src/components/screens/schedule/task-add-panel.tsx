@@ -19,6 +19,7 @@ import { getClientTimezoneOffsetMinutes } from "@/lib/ai/timezone";
 import { toDatetimeLocalValue, type ParsedTaskDraft } from "@/lib/ai/parse-task";
 import { useCategoryOptions } from "@/hooks/use-category-options";
 import { useI18n } from "@/i18n/i18n-provider";
+import { toast } from "sonner";
 import {
   FROSTED_FIELD,
   FROSTED_PANEL,
@@ -123,14 +124,14 @@ export function TaskAddPanel({
       const data = (await res.json()) as { tasks?: ParsedTaskDraft[]; source?: "ai" | "fallback" };
       const tasks = data.tasks ?? [];
       if (tasks.length === 0) {
-        alert(t("tasks.parseNoTasks"));
+        toast.error(t("tasks.parseNoTasks"));
         return;
       }
       setParsedTasks(tasks);
       setParseSource(data.source ?? "ai");
       applyParsedToForm(tasks[0], 0);
     } catch (err) {
-      alert(err instanceof Error ? err.message : t("tasks.parseFailed"));
+      toast.error(err instanceof Error ? err.message : t("tasks.parseFailed"));
     } finally {
       setParsing(false);
     }

@@ -59,6 +59,7 @@ import {
 import { primeUnmutedVideoPlayback } from "@/lib/unlock-browser-audio";
 import { YURI_SUPERVISION_VIDEOS } from "@/lib/officers/yuri-supervision-videos";
 import { useI18n } from "@/i18n/i18n-provider";
+import { toast } from "sonner";
 import {
   formatBlockLabelLocalized,
   formatBlockStartTimeLocalized,
@@ -652,7 +653,7 @@ export function MonitorScreen() {
       executeHandledRef.current = true;
       clearStashedExecuteTask();
       exitSupervisionTakeover();
-      alert(blocked);
+      toast.error(blocked);
       return;
     }
 

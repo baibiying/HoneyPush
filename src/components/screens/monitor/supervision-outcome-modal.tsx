@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Star,
@@ -13,6 +14,7 @@ import {
   CameraOff,
   Timer,
   Ban,
+  Share2,
 } from "lucide-react";
 import type { SupervisionOutcomeModalState } from "@/lib/supervision-outcome";
 import type { SupervisionOutcomeStats } from "@/lib/supervision-outcome";
@@ -24,6 +26,7 @@ import {
 } from "@/lib/monitor-i18n";
 import { useI18n } from "@/i18n/i18n-provider";
 import { SUPERVISION_MAX_STRIKES } from "@/lib/supervision-blocks";
+import { FocusShareCard } from "./focus-share-card";
 
 type SupervisionOutcomeModalProps = {
   outcome: SupervisionOutcomeModalState | null;
@@ -275,6 +278,7 @@ export function SupervisionOutcomeModal({
   onStartBreak,
 }: SupervisionOutcomeModalProps) {
   const { t } = useI18n();
+  const [showShareCard, setShowShareCard] = useState(false);
 
   if (!outcome) return null;
 
@@ -440,12 +444,12 @@ export function SupervisionOutcomeModal({
         </main>
 
         <footer className="relative shrink-0 border-t-4 border-[#1C1917] bg-black/50 px-4 py-4 sm:py-6 backdrop-blur-md">
-          <div className="mx-auto max-w-4xl">
+          <div className="mx-auto max-w-4xl flex gap-3">
             <button
               type="button"
               onClick={onPrimary}
               className={[
-                "w-full py-4 sm:py-5 font-bangers text-2xl sm:text-3xl md:text-4xl tracking-wider",
+                "flex-1 py-4 sm:py-5 font-bangers text-2xl sm:text-3xl md:text-4xl tracking-wider",
                 "border-[3px] border-[#1C1917] comic-shadow-lg transition-transform hover:scale-[1.01] active:scale-[0.99]",
                 isSuccess
                   ? "bg-gradient-to-b from-emerald-400 to-emerald-700 text-white"
@@ -454,9 +458,25 @@ export function SupervisionOutcomeModal({
             >
               {primaryLabel}
             </button>
+            {outcome.kind === "task-success" && (
+              <button
+                type="button"
+                onClick={() => setShowShareCard(true)}
+                className="py-4 sm:py-5 px-6 font-bangers text-2xl sm:text-3xl tracking-wider border-[3px] border-[#1C1917] bg-gradient-to-b from-amber-400 to-amber-700 text-white comic-shadow-lg transition-transform hover:scale-[1.01] active:scale-[0.99]"
+              >
+                <Share2 className="h-7 w-7 sm:h-8 sm:w-8" />
+              </button>
+            )}
           </div>
         </footer>
       </motion.div>
+      {showShareCard && outcome.kind === "task-success" && (
+        <FocusShareCard
+          stats={outcome.stats}
+          totalFocusMinutes={outcome.stats.totalBlocks * 25}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
     </AnimatePresence>
   );
 }

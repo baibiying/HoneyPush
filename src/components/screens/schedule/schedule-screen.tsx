@@ -7,6 +7,15 @@ import { memory } from "@eazo/sdk";
 import { request } from "@/lib/api/request";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useI18n } from "@/i18n/i18n-provider";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { TASKS_CHANGED_EVENT, emitClientEvent } from "@/lib/client-events";
 import { TaskAddPanel } from "./task-add-panel";
 import { TaskEditDialog, type ScheduleTask } from "./task-edit-dialog";
@@ -132,6 +141,7 @@ export function ScheduleScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [editingTask, setEditingTask] = useState<ScheduleTask | null>(null);
   const [openTaskMenuId, setOpenTaskMenuId] = useState<number | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const searchParams = useSearchParams();
   const [scene, setScene] = useState<ScheduleScene>("map");
@@ -413,7 +423,7 @@ export function ScheduleScreen() {
       }).catch(() => {});
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : t("tasks.addFailed"));
+      toast.error(err instanceof Error ? err.message : t("tasks.addFailed"));
     } finally {
       setAddingTask(false);
     }
@@ -457,7 +467,7 @@ export function ScheduleScreen() {
       }).catch(() => {});
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : t("tasks.batchAddFailed"));
+      toast.error(err instanceof Error ? err.message : t("tasks.batchAddFailed"));
     } finally {
       setAddingTask(false);
     }
@@ -514,13 +524,13 @@ export function ScheduleScreen() {
       if (aiLoading) return;
 
       if (pendingTasks.length === 0) {
-        if (!isAuto) alert(t("calendar.alertNeedTasks"));
+        if (!isAuto) toast.error(t("calendar.alertNeedTasks"));
         return;
       }
 
       const missingDeadline = pendingTasks.filter((task) => !task.deadline);
       if (missingDeadline.length > 0) {
-        if (!isAuto) alert(t("calendar.alertNeedDeadline"));
+        if (!isAuto) toast.error(t("calendar.alertNeedDeadline"));
         return;
       }
 
@@ -530,11 +540,11 @@ export function ScheduleScreen() {
         endTime,
       }));
       if (availability.length === 0) {
-        if (!isAuto) alert(t("calendar.alertNeedSlots"));
+        if (!isAuto) toast.error(t("calendar.alertNeedSlots"));
         return;
       }
       if (buildAvailabilityWindows(availability).length === 0) {
-        if (!isAuto) alert(t("calendar.alertSlotsExpired"));
+        if (!isAuto) toast.error(t("calendar.alertSlotsExpired"));
         return;
       }
 
@@ -582,7 +592,7 @@ export function ScheduleScreen() {
         const plan = Array.isArray(data.schedule) ? data.schedule : [];
         if (plan.length === 0) {
           if (!isAuto) {
-            alert(t("calendar.alertNoFit"));
+            toast.error(t("calendar.alertNoFit"));
           }
           return;
         }
@@ -656,7 +666,7 @@ export function ScheduleScreen() {
         }).catch(() => {});
       } catch (err) {
         if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-        alert(err instanceof Error ? err.message : t("calendar.scheduleFailed"));
+        toast.error(err instanceof Error ? err.message : t("calendar.scheduleFailed"));
       } finally {
         setAiLoading(false);
       }
@@ -673,14 +683,15 @@ export function ScheduleScreen() {
     ]
   );
 
-  const deleteTaskById = async (id: number) => {
+  const requestDeleteTask = (id: number) => {
     if (!canEdit) {
       promptLogin(t("prompts.deleteTask"));
       return;
     }
+    setDeleteConfirmId(id);
+  };
 
-    if (!window.confirm(t("common.confirmDeleteTask"))) return;
-
+  const deleteTaskById = async (id: number) => {
     try {
       const res = await request(`/api/tasks/${id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -693,9 +704,10 @@ export function ScheduleScreen() {
 
       setTasks((prev) => prev.filter((task) => task.id !== id));
       emitClientEvent(TASKS_CHANGED_EVENT);
+      setDeleteConfirmId(null);
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : t("tasks.deleteFailed"));
+      toast.error(err instanceof Error ? err.message : t("tasks.deleteFailed"));
     }
   };
 
@@ -719,7 +731,7 @@ export function ScheduleScreen() {
       playChime();
     } catch (err) {
       if (err instanceof Error && err.message === "AUTH_REQUIRED") return;
-      alert(err instanceof Error ? err.message : t("tasks.saveFailed"));
+      toast.error(err instanceof Error ? err.message : t("tasks.saveFailed"));
     } finally {
       setSavingEdit(false);
     }
@@ -790,7 +802,7 @@ export function ScheduleScreen() {
             }}
             onDelete={(taskId) => {
               setOpenTaskMenuId(null);
-              void deleteTaskById(taskId);
+              requestDeleteTask(taskId);
             }}
           />
           )
@@ -866,6 +878,28 @@ export function ScheduleScreen() {
         }}
         onSave={handleSaveEdit}
       />
+
+      <Dialog open={deleteConfirmId !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+        <DialogContent className="border-2 border-amber-500/50 bg-gradient-to-br from-amber-50 to-orange-50">
+          <DialogHeader>
+            <DialogTitle className="font-bangers text-xl text-amber-900 tracking-wide">
+              {t("common.confirmDeleteTask")}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} className="font-comic">
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => { if (deleteConfirmId !== null) void deleteTaskById(deleteConfirmId); }}
+              className="font-comic"
+            >
+              {t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
