@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { classifyRequestError, request } from "@/lib/api/request";
+import { request } from "@/lib/api/request";
 import {
   AUTH_CHANGED_EVENT,
   STATS_CHANGED_EVENT,

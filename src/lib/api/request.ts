@@ -7,7 +7,6 @@ export type RequestOptions = RequestInit & {
   timeoutMs?: number;
 };
 
-export type RequestFailureKind = "timeout" | "network" | "unknown";
 
 const DEFAULT_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 400;
@@ -37,16 +36,6 @@ export function isRetryableNetworkError(error: unknown) {
     msg.includes("load failed") ||
     msg.includes("aborted")
   );
-}
-
-export function classifyRequestError(error: unknown): RequestFailureKind {
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return "timeout";
-  }
-  if (isRetryableNetworkError(error)) {
-    return "network";
-  }
-  return "unknown";
 }
 
 function isRetryableStatus(status: number) {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useI18n } from "@/i18n/i18n-provider";
 import { usePlayerStats } from "@/hooks/use-player-stats";
 import { useAuth } from "@/components/auth/auth-provider";
-import { Coins, Palette, Star, Lock, ShoppingBag } from "lucide-react";
+import { Coins, Star, Lock, ShoppingBag } from "lucide-react";
 import { request } from "@/lib/api/request";
 import { toast } from "sonner";
 
